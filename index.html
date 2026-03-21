@@ -362,7 +362,7 @@ const SYSTEMS = {
     desc: 'West Africa Segment · 2Africa',
     stations: {
       DKR: { name: 'Dakar',         country: 'Senegal',       flag: '🇸🇳' },
-      ABJ: { name: 'Abidjan',       country: 'Côte d\'Ivoire',flag: '🇨🇮' },
+      ABJ: { name: 'Abidjan',       country: 'Cote dIvoire',   flag: '🇨🇮' },
       ACC: { name: 'Accra',         country: 'Ghana',         flag: '🇬🇭' },
       LGS: { name: 'Lagos',         country: 'Nigeria',       flag: '🇳🇬' },
       LBV: { name: 'Libreville',    country: 'Gabon',         flag: '🇬🇦' },
@@ -780,7 +780,7 @@ function renderAuditInfo(data){
     ${fi('audit_date','Audit Date',new Date().toISOString().slice(0,10),'')}
     ${fi('landing_party','Landing Party','','e.g. Openserve')}
     ${fi('city','City','','')}
-    ${fi('country','Country',st.country||','','')}
+    ${fi('country','Country',st.country||'','')}
   </div>
   ${fi('auditors','Audit Done By',userProfile?.name||'','Names of auditors')}
   ${fi('depot_name','Cable Depot / Storage Name','','')}
