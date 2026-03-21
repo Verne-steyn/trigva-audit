@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trigva — Cable Route Audit Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#0d0f14;--surface:#141820;--surface2:#1c2130;--border:#252d3f;
+  --accent:#00c2a8;--accent2:#0088ff;--warn:#ff6b35;--success:#22c55e;
+  --text:#e2e8f0;--text2:#8899aa;--text3:#4a5568;--red:#ef4444;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+
+/* AUTH */
+#auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 30% 20%,#0d2535 0%,var(--bg) 60%);}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:48px 40px;width:100%;max-width:440px;}
+.auth-logo{font-family:var(--mono);font-size:11px;letter-spacing:.3em;color:var(--accent);text-transform:uppercase;margin-bottom:8px;}
+.auth-title{font-size:24px;font-weight:600;margin-bottom:4px;}
+.auth-sub{font-size:13px;color:var(--text2);margin-bottom:32px;}
+.auth-tabs{display:flex;gap:2px;background:var(--bg);border-radius:8px;padding:3px;margin-bottom:24px;}
+.auth-tab{flex:1;padding:8px;text-align:center;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;}
+.auth-tab.active{background:var(--surface2);color:var(--text);font-weight:500;}
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:12px;font-weight:500;color:var(--text2);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase;}
+.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;transition:border-color .15s;}
+.field input:focus,.field select:focus{border-color:var(--accent);}
+.field select option{background:var(--bg);}
+.btn{width:100%;background:var(--accent);color:#000;border:none;border-radius:8px;padding:12px;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s;}
+.btn:hover{opacity:.85;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-sm{width:auto;padding:7px 16px;font-size:12px;}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-blue{background:var(--accent2);color:#fff;}
+.auth-msg{margin-top:14px;font-size:12px;text-align:center;color:var(--text2);min-height:18px;}
+.auth-msg.error{color:var(--red);}
+.auth-msg.ok{color:var(--success);}
+
+/* CABLE SYSTEM SELECT */
+#system-screen{display:none;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 70% 80%,#0d1a2a 0%,var(--bg) 60%);}
+.system-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:48px 40px;width:100%;max-width:520px;}
+.system-title{font-size:20px;font-weight:600;margin-bottom:6px;}
+.system-sub{font-size:13px;color:var(--text2);margin-bottom:28px;}
+.system-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;}
+.system-btn{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;text-align:left;transition:all .15s;color:var(--text);}
+.system-btn:hover{border-color:var(--accent);background:rgba(0,194,168,.06);}
+.system-btn.selected{border-color:var(--accent);background:rgba(0,194,168,.1);}
+.system-btn-name{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);margin-bottom:4px;}
+.system-btn-desc{font-size:11px;color:var(--text2);}
+.system-btn-add{border-style:dashed;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text3);}
+.system-btn-add:hover{color:var(--text2);}
+
+/* ASN UPLOAD SCREEN */
+#asn-screen{display:none;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 50% 50%,#0d2020 0%,var(--bg) 60%);}
+.asn-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:48px 40px;width:100%;max-width:520px;}
+.asn-badge{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;margin-bottom:8px;}
+.asn-title{font-size:20px;font-weight:600;margin-bottom:8px;}
+.asn-sub{font-size:13px;color:var(--text2);margin-bottom:28px;line-height:1.6;}
+.upload-zone{border:1.5px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:20px;position:relative;}
+.upload-zone:hover{border-color:var(--accent);background:rgba(0,194,168,.04);}
+.upload-zone.dragover{border-color:var(--accent);background:rgba(0,194,168,.08);}
+.upload-zone.uploaded{border-color:var(--success);background:rgba(34,197,94,.06);}
+.upload-icon{font-size:32px;margin-bottom:10px;opacity:.4;}
+.upload-label{font-size:13px;color:var(--text2);}
+.upload-label strong{color:var(--accent);}
+.upload-filename{font-family:var(--mono);font-size:12px;color:var(--success);margin-top:8px;}
+.upload-input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.asn-skip{font-size:12px;color:var(--text3);text-align:center;margin-top:12px;cursor:pointer;text-decoration:underline;}
+.asn-skip:hover{color:var(--text2);}
+
+/* APP SHELL */
+#app{display:none;flex-direction:column;min-height:100vh;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.topbar-left{display:flex;align-items:center;gap:16px;}
+.topbar-brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);letter-spacing:.15em;}
+.topbar-sep{width:1px;height:20px;background:var(--border);}
+.topbar-system{font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:.1em;}
+.topbar-station{font-family:var(--mono);font-size:12px;color:var(--text2);}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.asn-indicator{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--success);font-family:var(--mono);background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:4px 10px;}
+.asn-indicator.missing{color:var(--warn);background:rgba(255,107,53,.1);border-color:rgba(255,107,53,.2);cursor:pointer;}
+.user-badge{font-size:12px;color:var(--text2);}
+.signout-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:12px;color:var(--text2);cursor:pointer;font-family:var(--sans);transition:all .15s;}
+.signout-btn:hover{border-color:var(--text2);color:var(--text);}
+
+/* SUPERVISOR NAV */
+.sup-nav{background:var(--surface2);border-bottom:1px solid var(--border);padding:0 24px;display:flex;gap:4px;align-items:center;height:44px;}
+.sup-tab{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text2);transition:all .15s;}
+.sup-tab.active{background:var(--border);color:var(--text);}
+
+/* MAIN LAYOUT */
+.app-body{display:flex;flex:1;}
+.sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);padding:16px 0;flex-shrink:0;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto;}
+.sidebar-label{font-family:var(--mono);font-size:10px;letter-spacing:.15em;color:var(--text3);text-transform:uppercase;padding:4px 20px;margin-bottom:4px;}
+.sidebar-item{display:flex;align-items:center;justify-content:space-between;padding:8px 20px;border-radius:0;cursor:pointer;transition:all .12s;color:var(--text2);font-size:13px;}
+.sidebar-item:hover{background:var(--surface2);color:var(--text);}
+.sidebar-item.active{background:var(--surface2);color:var(--accent);font-weight:500;border-left:2px solid var(--accent);}
+.sidebar-item .snum{font-family:var(--mono);font-size:10px;color:var(--text3);min-width:20px;}
+.chk-badge{width:16px;height:16px;border-radius:50%;font-size:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.chk-badge.done{background:var(--success);color:#000;}
+.chk-badge.partial{background:var(--warn);color:#000;}
+.chk-badge.none{background:var(--surface2);}
+
+/* CONTENT */
+.content{flex:1;padding:24px;max-width:920px;overflow-y:auto;}
+.section-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;}
+.section-title{font-size:20px;font-weight:600;}
+.section-sub{font-size:13px;color:var(--text2);margin-top:4px;}
+.save-bar{display:flex;align-items:center;gap:10px;}
+.save-status{font-size:12px;color:var(--text2);font-family:var(--mono);}
+
+/* AUDIT ROWS */
+.audit-group{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden;}
+.audit-group-header{padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.05em;text-transform:uppercase;}
+.audit-row{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:start;padding:11px 16px;border-bottom:1px solid var(--border);transition:background .1s;}
+.audit-row:last-child{border-bottom:none;}
+.audit-row:hover{background:rgba(255,255,255,.02);}
+.row-num{font-family:var(--mono);font-size:11px;color:var(--text3);padding-top:2px;}
+.row-content{display:flex;flex-direction:column;gap:7px;}
+.row-label{font-size:13px;color:var(--text);line-height:1.4;}
+.row-hint{font-size:11px;color:var(--text2);font-style:italic;}
+.row-inputs{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px;}
+.row-input{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;min-width:100px;flex:1;transition:border-color .15s;}
+.row-input:focus{border-color:var(--accent);}
+.row-input.short{min-width:70px;flex:0 0 70px;}
+.row-input.wide{min-width:200px;flex:2;}
+.row-select{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;cursor:pointer;}
+.row-select option{background:var(--bg);}
+.row-check{display:flex;align-items:center;justify-content:center;padding-top:2px;}
+.checkbox{width:20px;height:20px;border:2px solid var(--border);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;}
+.checkbox:hover{border-color:var(--accent);}
+.checkbox.checked{background:var(--success);border-color:var(--success);}
+.checkbox.checked::after{content:'✓';font-size:12px;color:#000;font-weight:700;}
+.comments-area{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;resize:vertical;min-height:72px;margin-top:4px;}
+.comments-area:focus{border-color:var(--accent);}
+
+/* INFO GRID */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+.info-grid .field{margin-bottom:0;}
+
+/* MANHOLE */
+.manhole-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;}
+.manhole-card-header{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:var(--surface2);border-radius:10px 10px 0 0;cursor:pointer;}
+.manhole-card-title{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);}
+.manhole-card-body{padding:0;display:none;}
+.manhole-card-body.open{display:block;}
+.add-manhole-btn{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--surface);border:1px dashed var(--border);border-radius:10px;cursor:pointer;color:var(--text2);font-size:13px;width:100%;justify-content:center;transition:all .15s;margin-bottom:16px;}
+.add-manhole-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* FIBRE TABLE */
+.fibre-table{width:100%;border-collapse:collapse;}
+.fibre-table th{text-align:left;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;padding:8px 8px;border-bottom:1px solid var(--border);}
+.fibre-table td{padding:5px 3px;border-bottom:1px solid rgba(37,45,63,.5);vertical-align:middle;}
+.fibre-table td input,.fibre-table td select{background:var(--bg);border:1px solid transparent;border-radius:4px;padding:4px 7px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;width:100%;}
+.fibre-table td input:focus,.fibre-table td select:focus{border-color:var(--accent);}
+.fibre-num{font-family:var(--mono);font-size:11px;color:var(--text3);text-align:center;padding:0 6px;}
+
+/* ACTIVITY LOG */
+.activity-grid-header{display:grid;grid-template-columns:130px 2fr 1fr 1fr 2fr 28px;gap:6px;padding:9px 16px;border-bottom:1px solid var(--border);background:var(--surface2);}
+.activity-grid-row{display:grid;grid-template-columns:130px 2fr 1fr 1fr 2fr 28px;gap:6px;padding:8px 16px;border-bottom:1px solid var(--border);align-items:center;}
+.activity-grid-row:last-child{border-bottom:none;}
+.activity-grid-row input{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);font-family:var(--sans);outline:none;width:100%;}
+.add-activity-btn{display:flex;align-items:center;gap:6px;background:none;border:1px dashed var(--border);border-radius:6px;padding:8px 14px;color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--sans);transition:all .15s;margin:10px 16px;}
+.add-activity-btn:hover{border-color:var(--accent);color:var(--accent);}
+.del-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:0 3px;transition:color .15s;}
+.del-btn:hover{color:var(--red);}
+
+/* DASHBOARD */
+.dash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;}
+.kpi-label{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:8px;}
+.kpi-value{font-family:var(--mono);font-size:32px;font-weight:600;}
+.kpi-value.green{color:var(--success);}
+.kpi-value.orange{color:var(--warn);}
+.station-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+.station-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;cursor:pointer;transition:border-color .15s;}
+.station-card:hover{border-color:var(--accent);}
+.station-code{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--accent);}
+.station-name{font-size:13px;color:var(--text2);margin-top:2px;}
+.station-country{font-size:11px;color:var(--text3);}
+.station-progress{height:4px;background:var(--bg);border-radius:2px;margin-top:12px;overflow:hidden;}
+.station-progress-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .3s;}
+.prog-label{font-family:var(--mono);font-size:11px;color:var(--text2);margin-top:6px;}
+.status-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.status-pill.complete{background:rgba(34,197,94,.15);color:var(--success);}
+.status-pill.partial{background:rgba(255,107,53,.15);color:var(--warn);}
+.status-pill.draft{background:rgba(136,153,170,.15);color:var(--text2);}
+
+/* REPORT */
+.report-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;margin-top:24px;}
+.report-title{font-size:16px;font-weight:600;margin-bottom:6px;}
+.report-sub{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6;}
+.report-progress{background:var(--bg);border-radius:8px;padding:16px;margin-bottom:16px;font-size:13px;color:var(--text2);font-family:var(--mono);min-height:50px;}
+.report-progress.generating{color:var(--accent);}
+
+/* AUDIT LIST */
+.audit-list{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.audit-list-header{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;padding:9px 16px;border-bottom:1px solid var(--border);background:var(--surface2);}
+.audit-list-header span{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;}
+.audit-list-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;padding:12px 16px;border-bottom:1px solid var(--border);align-items:center;font-size:13px;color:var(--text2);transition:background .1s;}
+.audit-list-row:last-child{border-bottom:none;}
+.audit-list-row:hover{background:rgba(255,255,255,.02);}
+
+/* TOAST & MISC */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--text);opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none;z-index:999;}
+#toast.show{opacity:1;transform:translateY(0);}
+#toast.ok{border-color:var(--success);color:var(--success);}
+#toast.err{border-color:var(--red);color:var(--red);}
+.loading{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--text2);font-family:var(--mono);font-size:13px;}
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:10px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.hidden{display:none!important;}
+.divider{height:1px;background:var(--border);margin:20px 0;}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">Trigva · Audit Platform</div>
+    <div class="auth-title">Sign in</div>
+    <div class="auth-sub">Cable Route Audit Management System</div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchTab('login')">Sign In</div>
+      <div class="auth-tab" onclick="switchTab('register')">Register</div>
+    </div>
+    <div id="login-form">
+      <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
+      <div class="field"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••"></div>
+      <button class="btn" onclick="doLogin()">Sign In</button>
+      <div style="margin-top:10px;text-align:center"><span style="font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline" onclick="doReset()">Forgot password?</span></div>
+    </div>
+    <div id="register-form" class="hidden">
+      <div class="field"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
+      <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="work@email.com"></div>
+      <div class="field"><label>Role</label>
+        <select id="reg-role">
+          <option value="engineer">Field Engineer</option>
+          <option value="supervisor">Supervisor</option>
+        </select>
+      </div>
+      <div class="field"><label>Password</label><input type="password" id="reg-pass" placeholder="Min 8 characters"></div>
+      <button class="btn" onclick="doRegister()">Create Account</button>
+    </div>
+    <div class="auth-msg" id="auth-msg"></div>
+  </div>
+</div>
+
+<!-- CABLE SYSTEM SELECT -->
+<div id="system-screen">
+  <div class="system-card">
+    <div class="auth-logo">Trigva · Audit Platform</div>
+    <div class="system-title">Select Cable System</div>
+    <div class="system-sub">Choose the cable system you are auditing. You will then select your landing station.</div>
+    <div class="system-grid" id="system-grid"></div>
+    <button class="btn" onclick="proceedToStation()" id="system-next-btn" disabled>Continue →</button>
+    <div class="auth-msg" id="system-msg"></div>
+  </div>
+</div>
+
+<!-- ASN UPLOAD -->
+<div id="asn-screen">
+  <div class="asn-card">
+    <div class="asn-badge" id="asn-badge">Station</div>
+    <div class="asn-title" id="asn-title">Upload As-Built Document</div>
+    <div class="asn-sub" id="asn-sub">Before proceeding, please upload the ASN As-Built (Land Plant Installation Report) for this station. This document will be referenced in the final audit report.</div>
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" class="upload-input" id="asn-file-input" accept=".docx,.pdf,.doc">
+      <div class="upload-icon">📄</div>
+      <div class="upload-label"><strong>Click to browse</strong> or drag and drop</div>
+      <div class="upload-label" style="font-size:11px;margin-top:4px">.docx or .pdf accepted</div>
+      <div class="upload-filename hidden" id="upload-filename"></div>
+    </div>
+    <button class="btn" id="asn-proceed-btn" onclick="proceedAfterASN()" disabled>Proceed to Audit →</button>
+    <div class="asn-skip" onclick="skipASN()">Skip for now (document can be uploaded later)</div>
+    <div style="margin-top:16px">
+      <button class="btn btn-outline btn-sm" onclick="backToSystemSelect()" style="width:auto">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-brand">TRIGVA</div>
+      <div class="topbar-sep"></div>
+      <div class="topbar-system" id="topbar-system"></div>
+      <div class="topbar-sep"></div>
+      <div class="topbar-station" id="topbar-station"></div>
+    </div>
+    <div class="topbar-right">
+      <div class="asn-indicator" id="asn-indicator" onclick="reuploadASN()">📄 As-Built Loaded</div>
+      <div class="user-badge" id="user-badge"></div>
+      <button class="signout-btn" onclick="doSignout()">Sign out</button>
+    </div>
+  </div>
+  <div class="sup-nav hidden" id="sup-nav">
+    <div class="sup-tab active" onclick="supSwitch('overview')" id="sup-tab-overview">Overview</div>
+    <div class="sup-tab" onclick="supSwitch('audits')" id="sup-tab-audits">All Audits</div>
+  </div>
+  <div class="app-body">
+    <div class="sidebar" id="sidebar">
+      <div style="padding:12px 0">
+        <div class="sidebar-label">Audit Sections</div>
+        <div id="sidebar-items"></div>
+        <div class="divider" style="margin:12px 20px"></div>
+        <div class="sidebar-label">Actions</div>
+        <div class="sidebar-item" onclick="renderSection('report')" id="nav-report">
+          <span class="snum">★</span>
+          <span style="flex:1">Generate Report</span>
+        </div>
+      </div>
+    </div>
+    <div class="content" id="content">
+      <div class="loading"><div class="spinner"></div>Loading...</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://jpyukmcpkltuzobbuitn.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_ZsDHseMBPQgL-K58xvz4nw_kRLOnZ24';
+const CLAUDE_API_KEY = 'sk-placeholder';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ── CABLE SYSTEMS & STATIONS ──
+const SYSTEMS = {
+  EQU: {
+    name: 'Equiano',
+    desc: 'Portugal → South Africa · 15,000km',
+    stations: {
+      MBS: { name: 'Melkbosstrand', country: 'South Africa', flag: '🇿🇦' },
+      SWK: { name: 'Swakopmund',    country: 'Namibia',      flag: '🇳🇦' },
+      LOM: { name: 'Lomé',          country: 'Togo',          flag: '🇹🇬' },
+      LOS: { name: 'Lagos',         country: 'Nigeria',       flag: '🇳🇬' },
+      STH: { name: 'St Helena',     country: 'Saint Helena',  flag: '🇸🇭' },
+      SES: { name: 'Sesimbra',      country: 'Portugal',      flag: '🇵🇹' },
+    }
+  },
+  '2AG': {
+    name: '2Africa Gera',
+    desc: 'East Africa Ring · 2Africa',
+    stations: {
+      MOM: { name: 'Mombasa',       country: 'Kenya',         flag: '🇰🇪' },
+      DAR: { name: 'Dar es Salaam', country: 'Tanzania',      flag: '🇹🇿' },
+      MAJ: { name: 'Majunga',       country: 'Madagascar',    flag: '🇲🇬' },
+      DJI: { name: 'Djibouti',      country: 'Djibouti',      flag: '🇩🇯' },
+    }
+  },
+  '2AW': {
+    name: '2Africa West',
+    desc: 'West Africa Segment · 2Africa',
+    stations: {
+      DKR: { name: 'Dakar',         country: 'Senegal',       flag: '🇸🇳' },
+      ABJ: { name: 'Abidjan',       country: 'Côte d\'Ivoire',flag: '🇨🇮' },
+      ACC: { name: 'Accra',         country: 'Ghana',         flag: '🇬🇭' },
+      LGS: { name: 'Lagos',         country: 'Nigeria',       flag: '🇳🇬' },
+      LBV: { name: 'Libreville',    country: 'Gabon',         flag: '🇬🇦' },
+    }
+  },
+  EAS: {
+    name: 'EASSy',
+    desc: 'East Africa Submarine System',
+    stations: {
+      MTZ: { name: 'Mtunzini',      country: 'South Africa',  flag: '🇿🇦' },
+      MAP: { name: 'Maputo',        country: 'Mozambique',    flag: '🇲🇿' },
+      DSM: { name: 'Dar es Salaam', country: 'Tanzania',      flag: '🇹🇿' },
+      MBS2:{ name: 'Mombasa',       country: 'Kenya',         flag: '🇰🇪' },
+      MGD: { name: 'Mogadishu',     country: 'Somalia',       flag: '🇸🇴' },
+      PSD: { name: 'Port Sudan',    country: 'Sudan',         flag: '🇸🇩' },
+    }
+  }
+};
+
+const SECTIONS = [
+  {id:'info', label:'Audit Information'},
+  {id:'s1',   label:'Site Information'},
+  {id:'s2',   label:'Spare Cable'},
+  {id:'s3',   label:'Jointing Kits'},
+  {id:'s4',   label:'Test Equipment'},
+  {id:'s5',   label:'Jointing Support'},
+  {id:'s6',   label:'Manholes'},
+  {id:'s7',   label:'Tools'},
+  {id:'s8',   label:'Fibres'},
+  {id:'s9',   label:'IR Tests'},
+  {id:'s10',  label:'Risk Assessment'},
+  {id:'s11',  label:'Daily Activities'},
+];
+
+// ── STATE ──
+let currentUser = null, userProfile = null;
+let selectedSystem = null, selectedStation = null;
+let currentSection = 'info', auditData = {}, currentAuditId = null;
+let saveTimer = null, supView = 'overview';
+let asnFile = null, asnFileBase64 = null, asnFileName = null, asnUploaded = false;
+
+// ── AUTH ──
+function switchTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='register')));
+  document.getElementById('login-form').classList.toggle('hidden',tab!=='login');
+  document.getElementById('register-form').classList.toggle('hidden',tab!=='register');
+  setAuthMsg('','');
+}
+function setAuthMsg(msg,type,el='auth-msg'){
+  const e=document.getElementById(el);e.textContent=msg;
+  e.className='auth-msg'+(type?' '+type:'');
+}
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  if(!email||!pass){setAuthMsg('Please fill in all fields.','error');return;}
+  setAuthMsg('Signing in…','');
+  const{data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){setAuthMsg(error.message,'error');return;}
+  await goToSystemSelect(data.user);
+}
+async function doRegister(){
+  const name=document.getElementById('reg-name').value.trim();
+  const email=document.getElementById('reg-email').value.trim();
+  const role=document.getElementById('reg-role').value;
+  const pass=document.getElementById('reg-pass').value;
+  if(!name||!email||!pass){setAuthMsg('Please fill in all fields.','error');return;}
+  if(pass.length<8){setAuthMsg('Password must be at least 8 characters.','error');return;}
+  setAuthMsg('Creating account…','');
+  const{data,error}=await sb.auth.signUp({email,password:pass});
+  if(error){setAuthMsg(error.message,'error');return;}
+  if(data.user){
+    await sb.from('trigva_profiles').upsert({id:data.user.id,name,email,role});
+    setAuthMsg('Account created! Check your email to confirm, then sign in.','ok');
+    switchTab('login');
+  }
+}
+async function doReset(){
+  const email=document.getElementById('login-email').value.trim();
+  if(!email){setAuthMsg('Enter your email first.','error');return;}
+  await sb.auth.resetPasswordForEmail(email);
+  setAuthMsg('Password reset email sent.','ok');
+}
+async function doSignout(){await sb.auth.signOut();location.reload();}
+
+// ── SYSTEM SELECT ──
+async function goToSystemSelect(user){
+  currentUser=user;
+  const{data:profile}=await sb.from('trigva_profiles').select('*').eq('id',user.id).single();
+  userProfile=profile;
+  document.getElementById('auth-screen').style.display='none';
+  if(profile?.role==='supervisor'){
+    initSupervisorApp();return;
+  }
+  buildSystemGrid();
+  document.getElementById('system-screen').style.display='flex';
+}
+
+function buildSystemGrid(){
+  const grid=document.getElementById('system-grid');
+  grid.innerHTML='';
+  Object.entries(SYSTEMS).forEach(([code,sys])=>{
+    const btn=document.createElement('div');
+    btn.className='system-btn';
+    btn.dataset.code=code;
+    btn.innerHTML=`<div class="system-btn-name">${sys.name}</div><div class="system-btn-desc">${sys.desc}</div>`;
+    btn.onclick=()=>{
+      document.querySelectorAll('.system-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedSystem=code;
+      document.getElementById('system-next-btn').disabled=false;
+    };
+    grid.appendChild(btn);
+  });
+  // Add more button
+  const add=document.createElement('div');
+  add.className='system-btn system-btn-add';
+  add.innerHTML='<span style="font-size:20px;opacity:.4">+</span><span>More systems<br><span style="font-size:11px;opacity:.6">Contact Trigva to add</span></span>';
+  grid.appendChild(add);
+}
+
+function proceedToStation(){
+  if(!selectedSystem)return;
+  const sys=SYSTEMS[selectedSystem];
+  // Show station selection inside system screen
+  const grid=document.getElementById('system-grid');
+  grid.innerHTML='';
+  document.querySelector('.system-title').textContent=`Select Station — ${sys.name}`;
+  document.querySelector('.system-sub').textContent='Choose your landing station for this audit.';
+  document.getElementById('system-next-btn').disabled=true;
+  Object.entries(sys.stations).forEach(([code,st])=>{
+    const btn=document.createElement('div');
+    btn.className='system-btn';
+    btn.dataset.code=code;
+    btn.innerHTML=`<div class="system-btn-name">${code}</div><div class="system-btn-desc">${st.flag} ${st.name}, ${st.country}</div>`;
+    btn.onclick=()=>{
+      document.querySelectorAll('.system-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedStation=code;
+      document.getElementById('system-next-btn').disabled=false;
+    };
+    grid.appendChild(btn);
+  });
+  document.getElementById('system-next-btn').textContent='Continue →';
+  document.getElementById('system-next-btn').onclick=showASNUpload;
+  // Back button
+  const back=document.createElement('button');
+  back.className='btn btn-outline btn-sm';
+  back.style='width:auto;margin-top:10px';
+  back.textContent='← Back to Systems';
+  back.onclick=()=>{selectedStation=null;buildSystemGrid();document.querySelector('.system-title').textContent='Select Cable System';document.querySelector('.system-sub').textContent='Choose the cable system you are auditing.';document.getElementById('system-next-btn').textContent='Continue →';document.getElementById('system-next-btn').onclick=proceedToStation;document.getElementById('system-next-btn').disabled=true;};
+  grid.after(back);
+}
+
+// ── ASN UPLOAD ──
+function showASNUpload(){
+  if(!selectedStation)return;
+  const sys=SYSTEMS[selectedSystem];
+  const st=sys.stations[selectedStation];
+  document.getElementById('system-screen').style.display='none';
+  document.getElementById('asn-screen').style.display='flex';
+  document.getElementById('asn-badge').textContent=`${selectedSystem} · ${selectedStation}`;
+  document.getElementById('asn-title').textContent=`Upload As-Built Document — ${st.name}`;
+  document.getElementById('asn-sub').textContent=`Please upload the ASN Land Plant Installation Report (As-Built document) for ${st.name}, ${st.country}. This document is required for each station and will be cross-referenced in the final audit report. Every time you select this station, this document must be provided.`;
+  asnFile=null; asnFileBase64=null; asnFileName=null; asnUploaded=false;
+  document.getElementById('asn-proceed-btn').disabled=true;
+  document.getElementById('upload-zone').className='upload-zone';
+  document.getElementById('upload-filename').classList.add('hidden');
+  setupUploadZone();
+}
+
+function setupUploadZone(){
+  const zone=document.getElementById('upload-zone');
+  const input=document.getElementById('asn-file-input');
+  input.value='';
+  input.onchange=e=>{
+    const f=e.target.files[0];
+    if(f)handleASNFile(f);
+  };
+  zone.ondragover=e=>{e.preventDefault();zone.classList.add('dragover');};
+  zone.ondragleave=()=>zone.classList.remove('dragover');
+  zone.ondrop=e=>{
+    e.preventDefault();zone.classList.remove('dragover');
+    const f=e.dataTransfer.files[0];
+    if(f)handleASNFile(f);
+  };
+}
+
+function handleASNFile(file){
+  asnFile=file; asnFileName=file.name;
+  const zone=document.getElementById('upload-zone');
+  zone.classList.add('uploaded');
+  const fn=document.getElementById('upload-filename');
+  fn.textContent='✓ '+file.name;
+  fn.classList.remove('hidden');
+  // Read as base64
+  const reader=new FileReader();
+  reader.onload=e=>{
+    asnFileBase64=e.target.result.split(',')[1];
+    asnUploaded=true;
+    document.getElementById('asn-proceed-btn').disabled=false;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function proceedAfterASN(){
+  document.getElementById('asn-screen').style.display='none';
+  await initEngineerApp();
+}
+
+function skipASN(){
+  asnUploaded=false; asnFileBase64=null; asnFileName=null;
+  document.getElementById('asn-screen').style.display='none';
+  initEngineerApp();
+}
+
+function backToSystemSelect(){
+  document.getElementById('asn-screen').style.display='none';
+  document.getElementById('system-screen').style.display='flex';
+}
+
+function reuploadASN(){
+  showASNUpload();
+  document.getElementById('asn-proceed-btn').onclick=async()=>{
+    document.getElementById('asn-screen').style.display='none';
+    // Update ASN in current audit
+    if(currentAuditId&&asnFileBase64){
+      await sb.from('trigva_audits').update({asn_filename:asnFileName,asn_base64:asnFileBase64}).eq('id',currentAuditId);
+      updateASNIndicator();
+      toast('As-Built document updated ✓','ok');
+    }
+    document.getElementById('app').style.display='flex';
+  };
+}
+
+function updateASNIndicator(){
+  const ind=document.getElementById('asn-indicator');
+  if(asnUploaded||asnFileName){
+    ind.className='asn-indicator';
+    ind.innerHTML=`📄 ${asnFileName||'As-Built Loaded'}`;
+    ind.title='Click to replace As-Built document';
+  } else {
+    ind.className='asn-indicator missing';
+    ind.innerHTML='⚠ No As-Built — click to upload';
+  }
+}
+
+// ── ENGINEER APP ──
+async function initEngineerApp(){
+  const sys=SYSTEMS[selectedSystem];
+  const st=sys.stations[selectedStation];
+  document.getElementById('topbar-system').textContent=sys.name.toUpperCase();
+  document.getElementById('topbar-station').textContent=`${selectedStation} · ${st.name}`;
+  document.getElementById('user-badge').textContent=userProfile?.name||currentUser.email;
+  updateASNIndicator();
+  buildSidebar();
+  await loadOrCreateAudit();
+  document.getElementById('app').style.display='flex';
+  renderSection('info');
+}
+
+// ── SUPERVISOR APP ──
+function initSupervisorApp(){
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('topbar-system').textContent='ALL SYSTEMS';
+  document.getElementById('topbar-station').textContent='SUPERVISOR';
+  document.getElementById('user-badge').textContent=userProfile?.name||currentUser.email;
+  document.getElementById('sup-nav').classList.remove('hidden');
+  document.getElementById('sidebar').classList.add('hidden');
+  document.getElementById('asn-indicator').classList.add('hidden');
+  renderSupervisor();
+}
+
+// ── AUDIT LOAD/SAVE ──
+async function loadOrCreateAudit(){
+  const{data}=await sb.from('trigva_audits').select('*')
+    .eq('station_id',selectedStation).eq('system_id',selectedSystem).eq('status','draft')
+    .order('created_at',{ascending:false}).limit(1);
+  if(data&&data.length>0){
+    currentAuditId=data[0].id;
+    auditData=data[0].data_json||{};
+    if(data[0].asn_filename){asnFileName=data[0].asn_filename;asnUploaded=true;}
+    // Save new ASN if just uploaded
+    if(asnFileBase64){
+      await sb.from('trigva_audits').update({asn_filename:asnFileName,asn_base64:asnFileBase64}).eq('id',currentAuditId);
+    }
+  } else {
+    const{data:na}=await sb.from('trigva_audits').insert({
+      station_id:selectedStation, system_id:selectedSystem,
+      submitted_by:currentUser.id, status:'draft', data_json:{},
+      asn_filename:asnFileName||null, asn_base64:asnFileBase64||null
+    }).select().single();
+    if(na){currentAuditId=na.id;auditData={};}
+  }
+  updateASNIndicator();
+}
+
+function scheduleAutoSave(){
+  clearTimeout(saveTimer); saveTimer=setTimeout(saveAudit,1800);
+  const el=document.getElementById('save-status');
+  if(el)el.textContent='Unsaved…';
+}
+
+async function saveAudit(showMsg=false){
+  if(!currentAuditId)return;
+  collectCurrentSection();
+  await sb.from('trigva_audits').update({data_json:auditData,updated_at:new Date().toISOString()}).eq('id',currentAuditId);
+  const el=document.getElementById('save-status');
+  if(el)el.textContent='Saved';
+  if(showMsg)toast('Saved ✓','ok');
+  updateSidebarBadges();
+}
+
+async function submitAudit(){
+  await saveAudit();
+  await sb.from('trigva_audits').update({status:'submitted',submitted_at:new Date().toISOString()}).eq('id',currentAuditId);
+  toast('Audit submitted ✓','ok');
+  await loadOrCreateAudit();
+  renderSection('info');
+}
+
+function collectCurrentSection(){
+  const sec=currentSection;
+  auditData[sec]=auditData[sec]||{};
+  document.getElementById('content').querySelectorAll('[data-key]').forEach(el=>{
+    auditData[sec][el.dataset.key]=el.type==='checkbox'?el.checked:el.value;
+  });
+  if(sec==='s6'){auditData.s6=auditData.s6||{};auditData.s6.manholes=collectManholes();}
+  if(sec==='s11'){auditData.s11=auditData.s11||{};auditData.s11.activities=collectActivities();}
+}
+
+// ── SIDEBAR ──
+function buildSidebar(){
+  const c=document.getElementById('sidebar-items');
+  c.innerHTML=SECTIONS.map((s,i)=>`
+    <div class="sidebar-item" id="nav-${s.id}" onclick="renderSection('${s.id}')">
+      <span class="snum">${String(i).padStart(2,'0')}</span>
+      <span style="flex:1">${s.label}</span>
+      <span class="chk-badge none" id="badge-${s.id}"></span>
+    </div>`).join('');
+}
+
+function updateSidebarBadges(){
+  SECTIONS.forEach(s=>{
+    const badge=document.getElementById(`badge-${s.id}`);
+    if(!badge)return;
+    const sd=auditData[s.id]||{};
+    const all=Object.keys(sd).filter(k=>k.endsWith('_check'));
+    const done=all.filter(k=>sd[k]===true||sd[k]==='true');
+    if(!all.length){badge.className='chk-badge none';badge.textContent='';return;}
+    if(done.length===all.length){badge.className='chk-badge done';badge.textContent='✓';}
+    else{badge.className='chk-badge partial';badge.textContent=done.length;}
+  });
+}
+
+// ── SECTION RENDER ──
+function renderSection(sId){
+  if(currentSection!==sId)collectCurrentSection();
+  currentSection=sId;
+  document.querySelectorAll('.sidebar-item').forEach(el=>el.classList.remove('active'));
+  const nav=document.getElementById(`nav-${sId}`);
+  if(nav)nav.classList.add('active');
+  const data=auditData[sId]||{};
+  const content=document.getElementById('content');
+  const sLabel=SECTIONS.find(s=>s.id===sId)?.label||'Generate Report';
+  const sys=SYSTEMS[selectedSystem];
+  const st=sys?.stations[selectedStation];
+  const hdr=`<div class="section-header">
+    <div><div class="section-title">${sLabel}</div>
+    <div class="section-sub">${sys?.name||''} · ${selectedStation||''} — ${st?.name||''}</div></div>
+    <div class="save-bar">
+      <span class="save-status" id="save-status" style="font-size:12px;color:var(--text2);font-family:var(--mono)"></span>
+      <button class="btn btn-outline btn-sm" onclick="saveAudit(true)">Save</button>
+      ${sId==='s11'?'<button class="btn btn-sm btn-blue" style="width:auto;margin-left:4px" onclick="submitAudit()">Submit Audit</button>':''}
+    </div></div>`;
+  if(sId==='report'){content.innerHTML=hdr+renderReportPanel();return;}
+  const renders={info:renderAuditInfo,s1:renderS1,s2:renderS2,s3:renderS3,s4:renderS4,s5:renderS5,s6:renderS6,s7:renderS7,s8:renderS8,s9:renderS9,s10:renderS10,s11:renderS11};
+  content.innerHTML=hdr+(renders[sId]?renders[sId](data):'');
+  if(sId==='s6')renderManholeEvents();
+  if(sId==='s11')renderActivityEvents();
+  content.querySelectorAll('[data-key]').forEach(el=>{
+    el.addEventListener('change',scheduleAutoSave);
+    el.addEventListener('input',scheduleAutoSave);
+  });
+}
+
+// ── FIELD HELPERS ──
+function esc(s){return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function inp(key,data,ph='',cls=''){return `<input class="row-input ${cls}" data-key="${key}" value="${esc(data[key])}" placeholder="${ph}">`;}
+function sel(key,data,opts){const v=data[key]||'';return `<select class="row-select" data-key="${key}"><option value="">—</option>${opts.map(o=>`<option${v===o?' selected':''}>${o}</option>`).join('')}</select>`;}
+function chk(key,data){const c=data[key]===true||data[key]==='true';return `<div class="checkbox${c?' checked':''}" onclick="toggleCheck(this,'${key}')" data-key="${key}"></div>`;}
+function toggleCheck(el,key){const c=el.classList.toggle('checked');(auditData[currentSection]=auditData[currentSection]||{})[key]=c;scheduleAutoSave();}
+function row(num,label,inputs,ck,data,hint=''){return `<div class="audit-row">
+  <div class="row-num">${num}</div>
+  <div class="row-content"><div class="row-label">${label}</div>${hint?`<div class="row-hint">${hint}</div>`:''}<div class="row-inputs">${inputs}</div></div>
+  <div class="row-check">${chk(ck,data)}</div></div>`;}
+function grp(title,rows){return `<div class="audit-group"><div class="audit-group-header">${title}</div>${rows}</div>`;}
+function comments(key,data){return `<div class="audit-group"><div class="audit-group-header">Comments / Recommendations</div><div style="padding:12px 16px"><textarea class="comments-area" data-key="${key}">${esc(data[key])}</textarea></div></div>`;}
+
+// ── SECTION RENDERERS ──
+function renderAuditInfo(data){
+  const sys=SYSTEMS[selectedSystem];const st=sys?.stations[selectedStation]||{};
+  const fi=(key,label,val,ph='')=>`<div class="field"><label>${label}</label><input class="row-input" data-key="${key}" value="${esc(data[key]||val)}" placeholder="${ph}" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;width:100%"></div>`;
+  const asnBlock=asnUploaded||asnFileName?
+    `<div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font-size:12px;color:var(--success);font-weight:600">✓ As-Built Document Loaded</div><div style="font-size:11px;color:var(--text2);margin-top:2px;font-family:var(--mono)">${asnFileName||'Document on file'}</div></div>
+      <button class="btn btn-outline btn-sm" onclick="reuploadASN()">Replace</button></div>`:
+    `<div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font-size:12px;color:var(--warn);font-weight:600">⚠ No As-Built Document</div><div style="font-size:11px;color:var(--text2);margin-top:2px">Required for report generation</div></div>
+      <button class="btn btn-sm" style="background:var(--warn);color:#000;width:auto" onclick="reuploadASN()">Upload Now</button></div>`;
+  return asnBlock+`<div class="info-grid">
+    ${fi('system_name','System Name',sys?.name||'','System')}
+    ${fi('cls_name','CLS Name',st.name||'','Station name')}
+    ${fi('audit_date','Audit Date',new Date().toISOString().slice(0,10),'')}
+    ${fi('landing_party','Landing Party','','e.g. Openserve')}
+    ${fi('city','City','','')}
+    ${fi('country','Country',st.country||','','')}
+  </div>
+  ${fi('auditors','Audit Done By',userProfile?.name||'','Names of auditors')}
+  ${fi('depot_name','Cable Depot / Storage Name','','')}
+  <div class="divider"></div>
+  <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Complete all sections using the sidebar. Tick the ✓ checkbox on each row when verified. Use <strong style="color:var(--text)">Generate Report</strong> when the audit is complete.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">${SECTIONS.slice(1).map(s=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text2);transition:all .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'" onclick="renderSection('${s.id}')">${s.label} →</div>`).join('')}</div>`;
+}
+
+function renderS1(data){
+  return grp('Station & Site Details',
+    row(1,'CLS',inp('s1_cls',data,'Name')+inp('s1_lat',data,'Latitude','short')+inp('s1_lng',data,'Longitude','short'),'s1_cls_ck',data)+
+    row('','Physical address',inp('s1_cls_addr',data,'Address','wide'),'s1_addr_ck',data)+
+    row(2,'Cable storage',inp('s1_depot',data,'Depot name')+inp('s1_dlat',data,'Latitude','short')+inp('s1_dlng',data,'Longitude','short'),'s1_depot_ck',data)+
+    row(3,'Contact 1 (CLS Manager)',inp('s1_c1n',data,'Name & designation')+inp('s1_c1p',data,'Phone','short')+inp('s1_c1e',data,'Email'),'s1_c1_ck',data)+
+    row(4,'Contact 2',inp('s1_c2n',data,'Name & designation')+inp('s1_c2p',data,'Phone','short')+inp('s1_c2e',data,'Email'),'s1_c2_ck',data)+
+    row(5,'Contact 3',inp('s1_c3n',data,'Name & designation')+inp('s1_c3p',data,'Phone','short')+inp('s1_c3e',data,'Email'),'s1_c3_ck',data)+
+    row(6,'Beach / BMH',inp('s1_bmh',data,'BMH name')+inp('s1_blat',data,'Latitude','short')+inp('s1_blng',data,'Longitude','short'),'s1_bmh_ck',data)+
+    row('','Physical address',inp('s1_bmh_addr',data,'Address','wide'),'s1_baddr_ck',data)+
+    row(7,'CLS Staffing level',inp('s1_staff',data,'Number','short'),'s1_staff_ck',data)+
+    row(8,'NOC Location',inp('s1_noc',data,'NOC details','wide'),'s1_noc_ck',data))+
+  grp('System Configuration',
+    row(1,'System configuration',inp('s1_config',data,'Describe','wide'),'s1_cfg_ck',data)+
+    row(2,'Date system installed',inp('s1_install',data,'Date','short'),'s1_inst_ck',data))+
+  comments('s1_comments',data);
+}
+
+function renderS2(data){
+  return grp('Spare Cable Information',
+    row(1,'Drum protection',sel('s2_cover',data,['Yes','No']),'s2_cov_ck',data,'Are drums covered/sheltered?')+
+    row(2,'Drum condition',sel('s2_cond',data,['Clean','Dirty','Damaged']),'s2_cond_ck',data)+
+    row(3,'Drum orientation',sel('s2_orient',data,['Vertical','Horizontal']),'s2_ori_ck',data)+
+    row(4,'Fibre count',inp('s2_fibres',data,'Number','short'),'s2_fib_ck',data)+
+    row(5,'Drum complete (no cable used)',sel('s2_complete',data,['Yes','No'])+inp('s2_used',data,'Metres used if No','short'),'s2_comp_ck',data)+
+    row(7,'OALC4 drums available',inp('s2_oalc4n',data,'Number','short'),'s2_o4n_ck',data)+
+    row('','Nexans drums available',inp('s2_nexn',data,'Number','short'),'s2_nxn_ck',data)+
+    row(8,'Labelling — OALC4',inp('s2_oalc4_dnum',data,'Drum no','short')+inp('s2_oalc4_len',data,'Length (m)','short'),'s2_o4l_ck',data)+
+    row('','Labelling — Nexans',inp('s2_nex_dnum',data,'Drum no','short')+inp('s2_nex_len',data,'Length (m)','short'),'s2_nxl_ck',data)+
+    row(11,'Optical length OALC4 (OTDR)',inp('s2_oalc4_otdr',data,'Metres','short'),'s2_o4otdr_ck',data)+
+    row(12,'Cable length Nexans',inp('s2_nex_clen',data,'Metres','short'),'s2_nxclen_ck',data)+
+    row(13,'IR test — OALC4 copper to armouring',inp('s2_oalc4_ir',data,'Value','short'),'s2_o4ir_ck',data)+
+    row(14,'IR test — Nexans Cond A to B',inp('s2_nex_irab',data,'Value','short'),'s2_nxirab_ck',data)+
+    row('','IR test — Nexans Cond A to Armouring',inp('s2_nex_iraa',data,'Value','short'),'s2_nxiraa_ck',data)+
+    row('','IR test — Nexans Cond B to Armouring',inp('s2_nex_irba',data,'Value','short'),'s2_nxirba_ck',data)+
+    row(15,'Cable end protection — OALC4',sel('s2_oalc4_ep',data,['Yes','No','Steel end sleeve']),'s2_o4ep_ck',data)+
+    row('','Cable end protection — Nexans',sel('s2_nex_ep',data,['Yes','No','Steel end sleeve']),'s2_nxep_ck',data)+
+    row(16,'Fibres ready for testing — OALC4',sel('s2_oalc4_rdy',data,['Yes','No'])+inp('s2_oalc4_term',data,'End termination'),'s2_o4rdy_ck',data))+
+  comments('s2_comments',data);
+}
+
+function renderS3(data){
+  return grp('Protection & Quantity',
+    row(1,'Kits covered/sheltered',sel('s3_prot',data,['Yes','No']),'s3_prot_ck',data)+
+    row(2,'OALC4 joints on site',inp('s3_o4qty',data,'Number','short'),'s3_o4qty_ck',data)+
+    row('','BMH kits on site',inp('s3_bmhqty',data,'Number','short'),'s3_bmhqty_ck',data)+
+    row('','Earth kits on site',inp('s3_eqty',data,'Number','short'),'s3_eqty_ck',data)+
+    row('','Specific earth kits on site',inp('s3_seqty',data,'Number','short'),'s3_seqty_ck',data)+
+    row('','OGB kits on site',inp('s3_ogbqty',data,'Number','short'),'s3_ogbqty_ck',data))+
+  [1,2,3].map(n=>grp(`Kit ${n} Numbering`,
+    row('','OALC4',inp(`s3_k${n}_o4num`,data,'Kit no','short')+inp(`s3_k${n}_o4ser`,data,'Serial no','short'),`s3_k${n}o4_ck`,data)+
+    row('','BMH kit',inp(`s3_k${n}_bmhnum`,data,'Kit no','short')+inp(`s3_k${n}_bmhser`,data,'Serial no','short'),`s3_k${n}bmh_ck`,data)+
+    row('','Earth kit',inp(`s3_k${n}_enum`,data,'Kit no','short')+inp(`s3_k${n}_eser`,data,'Serial no','short'),`s3_k${n}e_ck`,data))).join('')+
+  grp('Condition',
+    ['OALC4','BMH Kit','Earth Kit','Specific Earth kit','OGB Kit'].map((t,i)=>
+      row('',`${t} — boxes sealed`,sel(`s3_seal_${i}`,data,['Yes','No','Partial']),`s3_seal_${i}_ck`,data)).join('')+
+    ['OALC4','BMH Kit','Earth Kit','Specific Earth kit','OGB Kit'].map((t,i)=>
+      row('',`${t} — expiry dates`,inp(`s3_exp_${i}`,data,'Date / note'),`s3_exp_${i}_ck`,data)).join('')+
+    ['OALC4','BMH Kit','Earth Kit','Specific Earth kit','OGB Kit'].map((t,i)=>
+      row('',`${t} — controlled environment`,sel(`s3_env_${i}`,data,['Yes','No','Partial']),`s3_env_${i}_ck`,data)).join(''))+
+  comments('s3_comments',data);
+}
+
+function renderS4(data){
+  return ['OTDR','Megger (IR test set)','Fibre scope'].map((e,ei)=>
+    grp(e,['Make','Model','Serial number','Calibration date','Functional','Charging'].map((f,fi)=>
+      row(fi===0?ei+1:'',f,inp(`s4_${ei}_${fi}`,data,f),`s4_${ei}_${fi}_ck`,data)).join(''))).join('')+
+  grp('Launch Cable',
+    row(4,'Length',inp('s4_lc_len',data,'Length','short'),'s4_lclen_ck',data)+
+    row('','Connector type',inp('s4_lc_con',data,'Type','short'),'s4_lccon_ck',data))+
+  grp('Cleaning Kit',
+    ['Cletop','Pen type cleaner','Alcohol swabs','Lint free paper (Kim wipes)'].map((item,i)=>
+      row(i===0?5:'',item,sel(`s4_cl_${i}`,data,['Yes','No']),`s4_cl_${i}_ck`,data)).join(''))+
+  comments('s4_comments',data);
+}
+
+function renderS5(data){
+  return grp('Jointing Support Equipment',
+    ['Gazebo tent with sides','Generator ≥3kW','Electrical extension cords >10m','Lights','Water pump','Spade',
+     'Manhole barriers & cones','Suitable ladder','Work benches ×2','Work table','Chairs ×2','Safety tripod','Manhole keys'].map((item,i)=>
+      row(i+1,item,sel(`s5_${i}`,data,['Yes','No']),`s5_${i}_ck`,data)).join(''))+
+  comments('s5_comments',data);
+}
+
+function renderS6(data){
+  const manholes=data.manholes||[{id:Date.now()}];
+  return grp('Fronthaul Information',
+    row(1,'Route patrolled?',sel('s6_patrol',data,['Yes','No'])+inp('s6_patrol_c',data,'Comment'),'s6_patrol_ck',data)+
+    row('','Protected by security?',sel('s6_sec',data,['Yes','No'])+inp('s6_sec_c',data,'Comment'),'s6_sec_ck',data)+
+    row(2,'Manholes regularly inspected?',sel('s6_insp',data,['Yes','No'])+inp('s6_insp_c',data,'Comment'),'s6_insp_ck',data)+
+    row('','Registered with local authority?',sel('s6_reg',data,['Yes','No'])+inp('s6_reg_c',data,'Comment'),'s6_reg_ck',data)+
+    row(3,'Fronthaul shared with others?',sel('s6_shared',data,['Yes','No'])+inp('s6_shared_n',data,'Name'),'s6_shared_ck',data)+
+    row(4,'3rd party construction notifications?',sel('s6_3p',data,['Yes','No'])+inp('s6_3p_c',data,'Comment'),'s6_3p_ck',data))+
+  `<div id="manhole-cards">${manholes.map((mh,idx)=>renderManholeCard(mh,idx,data)).join('')}</div>`+
+  `<button class="add-manhole-btn" onclick="addManhole()">+ Add Manhole</button>`+
+  comments('s6_comments',data);
+}
+
+function renderManholeCard(mh,idx,pd){
+  const id=mh.id||idx;
+  const d=(pd._mhdata&&pd._mhdata[id])||{};
+  const mFields=[
+    ['Latitude',`mh_${id}_lat`,'','short'],['Longitude',`mh_${id}_lng`,'','short'],
+    ['Manhole number',`mh_${id}_num`,'Number','short'],['Lid type',`mh_${id}_ltype`,'Cast iron/fibre crete/concrete',''],
+    ['Lid shape',`mh_${id}_lshape`,'Round/Rect/Square',''],['Covered with debris/sand?',`mh_${id}_debris`,'Type',''],
+    ['Lid welded closed?',`mh_${id}_welded`,'Yes/No','short'],['Extractor fan required?',`mh_${id}_fan`,'Yes/No','short'],
+    ['Ducts & sleeves sealed?',`mh_${id}_ducts`,'Yes/No','short'],['Earth position in manhole?',`mh_${id}_earth`,'Yes/No','short'],
+    ['Earth rod or bar?',`mh_${id}_erod`,'Bar/Rod','short'],['Ladder required?',`mh_${id}_ladder`,'Yes/No','short'],
+    ['Inside dimensions (LxWxH)',`mh_${id}_dims`,'m x m x m',''],['Fills with water?',`mh_${id}_water`,'Yes/No','short'],
+    ['Water pump required?',`mh_${id}_pump`,'Yes/No','short'],['Ducts — sea side',`mh_${id}_dsea`,'Number','short'],
+    ['Ducts — CLS side',`mh_${id}_dcls`,'Number','short'],['Inner ducts sea side?',`mh_${id}_isea`,'Yes/No','short'],
+    ['Inner ducts CLS side?',`mh_${id}_icls`,'Yes/No','short'],['Sleeve diameters (mm)',`mh_${id}_sdiam`,'mm','short'],
+    ['Hauling ropes in ducts?',`mh_${id}_haul`,'Yes/No','short'],['Cable sleeve position CLS side',`mh_${id}_spcls`,'Position',''],
+    ['Cable sleeve position BMH side',`mh_${id}_spbmh`,'Position',''],['Cables labelled?',`mh_${id}_lab`,'Yes/No','short'],
+    ['Cables on furniture?',`mh_${id}_furn`,'Yes/No','short'],['Slack on earth cable (m)',`mh_${id}_eslack`,'m','short'],
+    ['Spare ducts available?',`mh_${id}_spare`,'Yes/No','short'],['OALC4 cable slack (m)',`mh_${id}_oslack`,'m','short'],
+    ['Lid lifting device available?',`mh_${id}_llift`,'Yes/No','short'],['Manhole lid locked?',`mh_${id}_locked`,'Yes/No','short'],
+    ['Key location',`mh_${id}_key`,'Address',''],['Lifting device type',`mh_${id}_ltype2`,'Hydraulic/rings/levers',''],
+    ['24hr access?',`mh_${id}_24h`,'Yes/No','short'],['Safe to work 24hrs?',`mh_${id}_safe`,'Yes/No','short']];
+  return `<div class="manhole-card" id="mhcard-${id}">
+    <div class="manhole-card-header" onclick="toggleMH('${id}')">
+      <span class="manhole-card-title">Manhole ${idx+1}${d[`mh_${id}_num`]?' — MH '+d[`mh_${id}_num`]:''}</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:11px;color:var(--text3)">▼ expand</span>
+        <button onclick="removeMH(${idx},event)" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px">✕</button>
+      </div>
+    </div>
+    <div class="manhole-card-body" id="mhbody-${id}">
+      <div class="audit-group" style="margin:0;border:none;border-radius:0">
+        ${mFields.map(([label,key,ph,cls],i)=>`
+          <div class="audit-row">
+            <div class="row-num">${i+1}</div>
+            <div class="row-content"><div class="row-label">${label}</div>
+              <div class="row-inputs"><input class="row-input ${cls}" data-mh="${id}" data-key="${key}" value="${esc(d[key]||'')}" placeholder="${ph}"></div>
+            </div>
+            <div class="row-check">${chk(key+'_ck',d)}</div>
+          </div>`).join('')}
+      </div>
+      <div style="padding:10px 16px">
+        <textarea class="comments-area" data-mh="${id}" data-key="mh_${id}_comments" style="min-height:56px">${esc(d[`mh_${id}_comments`]||'')}</textarea>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderManholeEvents(){
+  document.getElementById('content').querySelectorAll('[data-mh]').forEach(el=>{
+    el.addEventListener('change',scheduleAutoSave);el.addEventListener('input',scheduleAutoSave);
+  });
+}
+function toggleMH(id){document.getElementById(`mhbody-${id}`).classList.toggle('open');}
+function addManhole(){collectCurrentSection();(auditData.s6=auditData.s6||{}).manholes=auditData.s6.manholes||[];auditData.s6.manholes.push({id:Date.now()});renderSection('s6');}
+function removeMH(idx,e){e.stopPropagation();collectCurrentSection();const m=(auditData.s6=auditData.s6||{}).manholes=auditData.s6.manholes||[];m.splice(idx,1);if(!m.length)m.push({id:Date.now()});renderSection('s6');}
+function collectManholes(){const m=[];document.querySelectorAll('.manhole-card').forEach(card=>{const id=card.id.replace('mhcard-','');const o={id,data:{}};card.querySelectorAll('[data-mh]').forEach(el=>{o.data[el.dataset.key]=el.value;});m.push(o);});return m;}
+
+function renderS7(data){
+  const tools=['Water pump pliers','Cutting pliers – side cutter','Mini bolt cutters','Snipe nose / longnose pliers','Combination pliers – electrician pliers','Electrical shears / scissors','Fixers snipers – snipe cutter','Grip pliers – vice grip','Set of screwdrivers','File flat with handle','Measuring tape','Steel ruler','Cutter knife – Stanley knife','Cutter blades – Stanley blades','Hacksaw','Set of flat spanners','Set of folding keys – Allen keys','Adjustable spanner / shifting spanner','Hammer','Mallet','Spirit level','Tool organiser bag','Tool chest','Rachet insert ¼"','Universal bit holder','Rachet set','Crimping pliers','Nylon strap wrenches','Hinged hook and pin wrench – C spanner','Digital display caliper / vernier','Plastic cable tie pliers','Cordless drill','Cordless perforator – SDS drill','Cordless angle grinder – 115mm','Heat gun','Portable lights','Battery charger','Drill set SDS','Dremel cordless tool','Dremel mandrel','Dremel cutting disk','Dremel flexible shaft','Mobile workbench','Ideal cutter – sheath stripper','Thermohydrometer','Bending claw','Triangular needle file','Torque wrench 10–15 Nm','Torque wrench 40–400 Nm','Torque screwdriver 0.5–2.5 Nm','Torque screwdriver 2–10 Nm','Ratchet handle for torque screwdrivers','Open end 10mm spanner','Open end 11mm spanner','Open end 13mm spanner','Open end 17mm spanner','Open end 19mm spanner','Socket holder tool adaptor','Toolbox','Mandrel','Wedge for URC2','Kynar shrink performing tool','OALC2 continuity removal tool','Tin opener tool','Spare tip for dryer','Spiral cutter ALROC','Blades for ALROC','Specific tool cutter','Blades for specific tube cutter','Cable stripper','Blade for MK01A','Tool Ripley WS 50','Spare blade for WS50','Refill for dryer','Dryer','Hand air pump','Specific tool for OCC-SC300 CEP'];
+  return grp('Jointing Tools — 77 Items',tools.map((t,i)=>row(i+1,t,sel(`s7_${i}`,data,['Yes','No']),`s7_${i}_ck`,data)).join(''))+
+  comments('s7_comments',data);
+}
+
+function renderS8(data){
+  const cols=['Blue','Orange','Green','Brown','Grey','White','Red','Black','Yellow','Violet','Rose','Aqua'];
+  let rows='';
+  for(let i=1;i<=32;i++){
+    rows+=`<tr>
+      <td class="fibre-num">${i}</td>
+      <td><input data-key="s8_f${i}_col" value="${esc(data[`s8_f${i}_col`]||cols[(i-1)%12])}"></td>
+      <td><input data-key="s8_f${i}_dist" value="${esc(data[`s8_f${i}_dist`]||'')}" placeholder="m"></td>
+      <td><select data-key="s8_f${i}_pf" style="background:var(--bg);border:1px solid transparent;border-radius:4px;padding:4px 7px;font-size:12px;color:var(--text);font-family:var(--sans);outline:none;width:100%">
+        <option value="">—</option><option${data[`s8_f${i}_pf`]==='Pass'?' selected':''}>Pass</option><option${data[`s8_f${i}_pf`]==='Fail'?' selected':''}>Fail</option></select></td>
+      <td><input data-key="s8_f${i}_cmt" value="${esc(data[`s8_f${i}_cmt`]||'')}" placeholder="Comment"></td>
+      <td style="text-align:center">${chk(`s8_f${i}_ck`,data)}</td></tr>`;
+  }
+  return `<div class="audit-group"><div class="audit-group-header">Fibre Test Results — 32 Fibres</div>
+    <div style="padding:12px 16px;overflow-x:auto">
+      <table class="fibre-table">
+        <thead><tr><th style="width:36px">#</th><th>Colour</th><th>Distance (m)</th><th>Pass / Fail</th><th>Comment</th><th>✓</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div></div>`;
+}
+
+function renderS9(data){
+  let oalc4='';for(let i=1;i<=4;i++){oalc4+=row('',`Drum ${i} — Screen to copper`,inp(`s9_o4d${i}_ref`,data,'Drum ref','short')+inp(`s9_o4d${i}_val`,data,'Value','short')+sel(`s9_o4d${i}_pf`,data,['Pass','Fail']),`s9_o4d${i}_ck`,data);}
+  let nex='';for(let i=1;i<=4;i++){nex+=`<div class="audit-group-header" style="background:rgba(0,0,0,.15);font-size:10px;padding:6px 16px">Drum ${i}</div>`+
+    row('','Cond A to Cond B',inp(`s9_nxd${i}_ab`,data,'Value','short')+sel(`s9_nxd${i}_abpf`,data,['Pass','Fail']),`s9_nxd${i}_ab_ck`,data)+
+    row('','Cond A to Armouring',inp(`s9_nxd${i}_aa`,data,'Value','short')+sel(`s9_nxd${i}_aapf`,data,['Pass','Fail']),`s9_nxd${i}_aa_ck`,data)+
+    row('','Cond B to Armouring',inp(`s9_nxd${i}_ba`,data,'Value','short')+sel(`s9_nxd${i}_bapf`,data,['Pass','Fail']),`s9_nxd${i}_ba_ck`,data)+
+    row('','Conds A+B to Armouring',inp(`s9_nxd${i}_aba`,data,'Value','short')+sel(`s9_nxd${i}_abapf`,data,['Pass','Fail']),`s9_nxd${i}_aba_ck`,data);}
+  return grp('IR Tests — OALC4',oalc4)+grp('IR Tests — Nexans',nex)+
+    grp('Earth Resistivity Test on OGB (use Megger DET24C)',
+      row(1,'Conductor to earth',inp('s9_e_cond',data,'Value','short')+sel('s9_e_condpf',data,['Pass','Fail']),'s9_e_cond_ck',data)+
+      row(2,'Armouring to earth',inp('s9_e_arm',data,'Value','short')+sel('s9_e_armpf',data,['Pass','Fail']),'s9_e_arm_ck',data));
+}
+
+function renderS10(data){
+  const cats=[
+    {t:'1. Construction risks',items:['Ongoing/planned civil works near cable route?','Permits obtained for 3rd-party excavations?','Cable route registered as protected utility?','Warning signs/markers visible along route?','Landing party engaged local authorities on safe dig practices?','Evidence of recent ground disturbance?']},
+    {t:'2. Security of manhole infrastructure',items:['Manhole covers intact, undamaged, properly seated?','Locking/bolting mechanisms installed and functional?','Evidence of unauthorised access or tampering?','Surrounding surfaces stable (no subsidence)?','Manhole frames and covers free of corrosion?','Manhole ID labels/numbers visible?','Routine inspection schedule in place?']},
+    {t:'3. Land route sharing',items:['Other network cables/ducts in same manholes?','Foreign cables organised, fixed, and labelled?','Clear segregation between submarine cable and others?','Unused/abandoned cables removed or tied back?','Damage/stress to submarine cable from crowding?','Responsibilities for shared manholes clearly defined?']},
+    {t:'4. Manhole maintenance tools',items:['Opening tools available and working?','Ladders, barriers, cones, warning signs available?','Pumps/hoses available for flooded manholes?','Temporary lighting available?','Traffic management deployed for road-access work?','Tools inspected and maintained regularly?']},
+    {t:'5. Health & Safety (PPE)',items:['All personnel wearing approved PPE?','H&S briefing/toolbox talk before site entry?','Confined space entry procedures followed?','Gas detection performed before entry?','Safety barriers and warning signs in use?','First aid kits and emergency contacts available?','Safe access and egress to manholes?']},
+    {t:'6. Environmental risks',items:['Water ingress/flooding posing risk?','Oil/chemicals stored/disposed correctly?','Evidence of erosion or ground instability?','Drainage systems functional and clear?','Vegetation managed to prevent duct interference?']}
+  ];
+  let ki=0;
+  return cats.map(cat=>grp(cat.t,cat.items.map(item=>{const k=`s10_${ki}`;ki++;return row('',item,sel(k+'_ans',data,['Yes','No','N/A'])+inp(k+'_c',data,'Comment'),k+'_ck',data);}).join(''))).join('');
+}
+
+function renderS11(data){
+  const acts=data.activities||[{}];
+  return `<div class="audit-group">
+    <div class="activity-grid-header">
+      ${['Date','Activity / Description','Location','Participants','Remarks / Outcome',''].map(h=>`<span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">${h}</span>`).join('')}
+    </div>
+    <div id="act-rows">${acts.map((a,i)=>`
+      <div class="activity-grid-row" data-ai="${i}">
+        <input type="date" data-ai="${i}" data-af="date" value="${esc(a.date||'')}">
+        <input data-ai="${i}" data-af="desc" value="${esc(a.desc||'')}" placeholder="Activity description">
+        <input data-ai="${i}" data-af="loc" value="${esc(a.loc||'')}" placeholder="Location">
+        <input data-ai="${i}" data-af="part" value="${esc(a.part||'')}" placeholder="Participants">
+        <input data-ai="${i}" data-af="rem" value="${esc(a.rem||'')}" placeholder="Remarks">
+        <button class="del-btn" onclick="removeAct(${i})">✕</button>
+      </div>`).join('')}
+    </div>
+    <button class="add-activity-btn" onclick="addAct()">+ Add activity day</button>
+  </div>`;
+}
+
+function renderActivityEvents(){
+  document.getElementById('content').querySelectorAll('[data-ai]').forEach(el=>{
+    el.addEventListener('change',scheduleAutoSave);el.addEventListener('input',scheduleAutoSave);
+  });
+}
+function addAct(){collectCurrentSection();(auditData.s11=auditData.s11||{}).activities=auditData.s11.activities||[];auditData.s11.activities.push({});renderSection('s11');}
+function removeAct(idx){collectCurrentSection();const a=(auditData.s11=auditData.s11||{}).activities=auditData.s11.activities||[];a.splice(idx,1);if(!a.length)a.push({});renderSection('s11');}
+function collectActivities(){const acts=[];document.querySelectorAll('[data-ai][data-af]').forEach(el=>{const i=parseInt(el.dataset.ai);acts[i]=acts[i]||{};acts[i][el.dataset.af]=el.value;});return acts;}
+
+// ── REPORT PANEL ──
+function renderReportPanel(){
+  const complete=calcProgress(auditData);
+  const hasASN=asnUploaded||asnFileName;
+  return `<div class="report-panel">
+    <div class="report-title">Generate Audit Report</div>
+    <div class="report-sub">Claude will analyse the completed audit data${hasASN?' and the uploaded As-Built document':''} to produce a professional Word report matching the Trigva report template. The report will include an executive summary, findings per section, risks and opportunities, and recommendations.</div>
+    <div style="display:flex;gap:16px;margin-bottom:20px">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 20px;flex:1">
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Audit Progress</div>
+        <div style="font-family:var(--mono);font-size:24px;color:${complete>80?'var(--success)':complete>40?'var(--warn)':'var(--text)'}">${complete}%</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 20px;flex:1">
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">As-Built Document</div>
+        <div style="font-size:13px;${hasASN?'color:var(--success)':'color:var(--warn)'}">
+          ${hasASN?'✓ '+(asnFileName||'Loaded'):'⚠ Not uploaded'}
+        </div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 20px;flex:1">
+        <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Station</div>
+        <div style="font-family:var(--mono);font-size:18px;color:var(--accent)">${selectedStation}</div>
+        <div style="font-size:11px;color:var(--text2)">${SYSTEMS[selectedSystem]?.name}</div>
+      </div>
+    </div>
+    ${!hasASN?`<div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.2);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--warn)">⚠ The As-Built document has not been uploaded. The report will be generated from audit data only. <span style="cursor:pointer;text-decoration:underline" onclick="reuploadASN()">Upload now</span> for a more complete report.</div>`:''}
+    <div class="report-progress" id="report-progress">Ready to generate. The report will be downloaded as a Word (.docx) file.</div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-blue" style="width:auto;padding:10px 24px" onclick="generateReport()" id="gen-btn">Generate Word Report</button>
+      <button class="btn btn-outline btn-sm" onclick="saveAudit(true)">Save Audit First</button>
+    </div>
+  </div>`;
+}
+
+// ── REPORT GENERATION ──
+async function generateReport(){
+  await saveAudit();
+  const btn=document.getElementById('gen-btn');
+  const prog=document.getElementById('report-progress');
+  btn.disabled=true;
+  prog.className='report-progress generating';
+  prog.textContent='Preparing audit data…';
+  const sys=SYSTEMS[selectedSystem];
+  const st=sys.stations[selectedStation];
+  const auditSummary=JSON.stringify(auditData,null,2);
+  const messages=[{role:'user',content:[
+    ...(asnFileBase64?[{type:'document',source:{type:'base64',media_type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',data:asnFileBase64}}]:[]),
+    {type:'text',text:`You are generating a professional Land Cable Route Audit Report for Trigva.
+
+CABLE SYSTEM: ${sys.name}
+STATION: ${selectedStation} — ${st.name}, ${st.country}
+AUDITOR(S): ${auditData.info?.auditors||'Not specified'}
+AUDIT DATE: ${auditData.info?.audit_date||'Not specified'}
+
+${asnFileBase64?'The ASN As-Built (Land Plant Installation Report) is attached. Use it to:\n- Pull the system introduction paragraph verbatim\n- Reference original installation values (splice losses, IR readings, GPS coordinates, spares delivered)\n- Compare As-Built values against current audit findings\n':'No As-Built document was provided.\n'}
+
+AUDIT DATA (JSON):
+${auditSummary}
+
+Generate a structured audit report in the following exact format. Write in professional technical English. Be specific and evidence-based.
+
+---
+REPORT STRUCTURE:
+
+# ${sys.name} Land Cable Route Audit Report
+## ${st.name}, ${st.country}
+### Issue 01, ${new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'})}
+### Prepared by Trigva
+
+---
+## 1. Introduction
+[Write 3-4 paragraphs describing the ${sys.name} cable system using the As-Built document. Include: system description, route, branching units, land cable configuration, earth return system, BMH location. If no As-Built, use audit info field for context.]
+
+## 2. Executive Summary
+[Write 8-10 bullet points covering: cable system overview, audit scope, spare cable condition, joint kits status, test equipment status, jointing support equipment, optical test results, route/manhole condition, key recommendations. Be specific using the audit data values.]
+
+## 3. Audit Overview
+[Brief paragraph on audit methodology, dates, team. List manhole GPS coordinates from audit data in a table: Manhole | Latitude | Longitude]
+
+## 4. Scope of Work
+
+### 4.1 Spare Cable
+**Overview:** [2-3 sentences on storage conditions, quantities, drum condition based on Section 2 data]
+**Risks and Opportunities:**
+- [List specific risks and recommendations from the data]
+
+### 4.2 Spare Joint Kits and Consumables
+**Overview:** [2-3 sentences on kit storage, quantities, completeness based on Section 3 data]
+**Risks and Opportunities:**
+- [List specific risks]
+
+### 4.3 Test Equipment
+**Overview:** [2-3 sentences on equipment found, calibration status based on Section 4 data]
+**Risks and Opportunities:**
+- [List items missing or needing attention]
+
+### 4.4 Jointing Support Equipment
+**Overview:** [2-3 sentences based on Section 5 data]
+**Risks and Opportunities:**
+- [List missing equipment]
+
+## 5. Test Results
+
+### 5.1 Insulation Resistance Results
+**Overview:** [Summarise IR test values from Section 9. Note pass/fail. Reference As-Built baseline if available.]
+**Risks and Opportunities:** [Nil if all passed, otherwise list concerns]
+
+### 5.2 Optical Results
+**Overview:** [Summarise fibre test results from Section 8. Count passes and fails. Note any anomalies.]
+**Risks and Opportunities:** [List any fibres that failed and recommended actions]
+
+## 6. Route Inspection
+**Overview:** [Summarise manhole condition from Section 6 — fronthaul patrol, security, manhole conditions]
+**Risks and Opportunities:** [List any issues found]
+
+## 7. Diary of Events
+[Format the daily activities from Section 11 as a table: Date | Activity | Location | Participants | Outcome]
+
+## 8. Summary and Opportunities
+[Write 2-3 substantial paragraphs summarising the overall condition, primary risks identified, and opportunities for improvement. Be specific. Reference actual values from the audit data.]
+
+---
+End the report with: "Report generated by Trigva Audit Platform · ${new Date().toLocaleDateString()}"
+`}]}];
+  prog.textContent='Analysing audit data and As-Built document…';
+  try {
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':CLAUDE_API_KEY,'anthropic-version':'2023-06-01'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,messages})
+    });
+    const d=await resp.json();
+    if(d.error){throw new Error(d.error.message);}
+    const reportText=d.content.map(c=>c.text||'').join('');
+    prog.textContent='Building Word document…';
+    await buildWordDoc(reportText,sys,st);
+    prog.className='report-progress';
+    prog.textContent='✓ Report generated and downloaded successfully.';
+    toast('Report downloaded ✓','ok');
+  } catch(e){
+    prog.className='report-progress';
+    prog.textContent='Error: '+e.message;
+    toast('Report generation failed','err');
+  }
+  btn.disabled=false;
+}
+
+async function buildWordDoc(reportText,sys,st){
+  // Parse the report text into sections and create a downloadable .docx-like RTF
+  // Since we can't run Node.js here, we generate a rich HTML file that opens in Word
+  const htmlContent=`<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+body{font-family:Arial,sans-serif;font-size:12pt;margin:2.5cm;line-height:1.5;color:#000;}
+h1{font-size:20pt;font-weight:bold;color:#1F3864;border-bottom:2px solid #1F3864;padding-bottom:6pt;margin-top:24pt;}
+h2{font-size:16pt;font-weight:bold;color:#1F3864;margin-top:18pt;}
+h3{font-size:13pt;font-weight:bold;color:#2E4882;margin-top:12pt;}
+table{border-collapse:collapse;width:100%;margin:12pt 0;}
+th{background:#1F3864;color:#fff;padding:6pt 10pt;text-align:left;font-size:10pt;}
+td{border:1px solid #ccc;padding:5pt 10pt;font-size:10pt;}
+tr:nth-child(even) td{background:#f5f7fa;}
+ul{margin:6pt 0 12pt 20pt;}
+li{margin-bottom:4pt;}
+.cover{text-align:center;margin-top:4cm;}
+.cover h1{border:none;font-size:28pt;}
+.cover .sub{font-size:14pt;color:#555;margin:8pt 0;}
+.cover .meta{font-size:11pt;color:#777;margin-top:24pt;}
+strong{font-weight:bold;}
+</style>
+</head><body>
+<div class="cover">
+  <p style="font-size:11pt;color:#777;text-transform:uppercase;letter-spacing:3px">Trigva</p>
+  <h1>${sys.name} Land Cable Route Audit</h1>
+  <div class="sub">${st.name}, ${st.country}</div>
+  <div class="sub">Issue 01 · ${new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div>
+  <div class="meta">Prepared by Trigva<br>Audit Platform Report</div>
+</div>
+<div style="page-break-before:always"></div>
+${markdownToHTML(reportText)}
+</body></html>`;
+  const blob=new Blob([htmlContent],{type:'application/msword'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`Trigva_${sys.name.replace(/ /g,'_')}_${st.name.replace(/ /g,'_')}_Audit_Report_${new Date().toISOString().slice(0,10)}.doc`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function markdownToHTML(md){
+  return md
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/^- (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g,'<ul>$&</ul>')
+    .replace(/\n\n/g,'</p><p>')
+    .replace(/^([^<].+)$/gm,'<p>$1</p>')
+    .replace(/<p><\/p>/g,'')
+    .replace(/\|(.+)\|/g,(m,cells)=>{
+      const cols=cells.split('|').map(c=>c.trim());
+      return '<tr>'+cols.map(c=>c.match(/^[-:]+$/)?' ':`<td>${c}</td>`).join('')+'</tr>';
+    })
+    .replace(/(<tr>.*<\/tr>\n?)+/g,'<table>$&</table>');
+}
+
+// ── SUPERVISOR ──
+async function renderSupervisor(){
+  if(supView==='overview')await renderSupOverview();
+  else await renderSupAudits();
+}
+async function supSwitch(view){
+  supView=view;
+  document.querySelectorAll('.sup-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(`sup-tab-${view}`).classList.add('active');
+  await renderSupervisor();
+}
+async function renderSupOverview(){
+  const content=document.getElementById('content');
+  content.innerHTML='<div class="loading"><div class="spinner"></div>Loading…</div>';
+  const{data:audits}=await sb.from('trigva_audits').select('*').order('created_at',{ascending:false});
+  const stMap={};
+  if(audits)audits.forEach(a=>{const k=`${a.system_id}_${a.station_id}`;if(!stMap[k]||a.status==='submitted')stMap[k]=a;});
+  const total=Object.values(SYSTEMS).reduce((acc,s)=>acc+Object.keys(s.stations).length,0);
+  const submitted=Object.values(stMap).filter(a=>a.status==='submitted').length;
+  const inprog=Object.values(stMap).filter(a=>a.status==='draft').length;
+  content.innerHTML=`<div class="section-header"><div><div class="section-title">Supervisor Overview</div><div class="section-sub">Trigva · All Cable Systems · All Stations</div></div></div>
+  <div class="dash-grid">
+    <div class="kpi-card"><div class="kpi-label">Total Stations</div><div class="kpi-value">${total}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Submitted</div><div class="kpi-value green">${submitted}</div></div>
+    <div class="kpi-card"><div class="kpi-label">In Progress</div><div class="kpi-value orange">${inprog}</div></div>
+  </div>
+  ${Object.entries(SYSTEMS).map(([sysCode,sys])=>`
+    <div style="margin-bottom:24px">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin-bottom:10px">${sys.name} — ${sys.desc}</div>
+      <div class="station-grid">
+        ${Object.entries(sys.stations).map(([stCode,st])=>{
+          const audit=stMap[`${sysCode}_${stCode}`];
+          const status=audit?audit.status:'none';
+          const prog=audit?calcProgress(audit.data_json||{}):0;
+          const hasASN=audit?.asn_filename;
+          return `<div class="station-card">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
+              <div><div class="station-code">${stCode}</div><div class="station-name">${st.name}</div><div class="station-country">${st.flag} ${st.country}</div></div>
+              <div class="status-pill ${status==='submitted'?'complete':status==='draft'?'partial':'draft'}">${status==='submitted'?'✓ Submitted':status==='draft'?'In Progress':'No Audit'}</div>
+            </div>
+            ${audit?`<div style="font-size:11px;color:${hasASN?'var(--success)':'var(--warn)'};margin-bottom:6px">${hasASN?'📄 As-Built loaded':'⚠ No As-Built'}</div>`:'' }
+            <div class="station-progress"><div class="station-progress-bar" style="width:${prog}%"></div></div>
+            <div class="prog-label">${prog}% complete</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('')}`;
+}
+async function renderSupAudits(){
+  const content=document.getElementById('content');
+  content.innerHTML='<div class="loading"><div class="spinner"></div>Loading…</div>';
+  const{data:audits}=await sb.from('trigva_audits').select('*, trigva_profiles(name)').order('created_at',{ascending:false});
+  content.innerHTML=`<div class="section-header"><div><div class="section-title">All Audit Submissions</div></div></div>
+  <div class="audit-list">
+    <div class="audit-list-header"><span>Station</span><span>Engineer</span><span>Date</span><span>Progress</span><span>Status</span></div>
+    ${(audits||[]).map(a=>{
+      const sys=SYSTEMS[a.system_id];const st=sys?.stations[a.station_id]||{};
+      const prog=calcProgress(a.data_json||{});
+      const date=a.data_json?.info?.audit_date||a.created_at?.slice(0,10)||'—';
+      return `<div class="audit-list-row">
+        <span><strong style="color:var(--accent);font-family:var(--mono)">${a.station_id}</strong> ${st.name||''}<br><span style="font-size:11px;color:var(--text3)">${sys?.name||a.system_id}</span></span>
+        <span>${a.trigva_profiles?.name||'—'}</span>
+        <span style="font-family:var(--mono);font-size:12px">${date}</span>
+        <span style="font-family:var(--mono);font-size:12px">${prog}%</span>
+        <span><div class="status-pill ${a.status==='submitted'?'complete':'partial'}">${a.status==='submitted'?'✓ Submitted':'Draft'}</div></span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function calcProgress(dj){
+  if(!dj)return 0;
+  let total=0,done=0;
+  Object.values(dj).forEach(sec=>{
+    if(typeof sec!=='object'||!sec)return;
+    Object.entries(sec).forEach(([k,v])=>{if(k.endsWith('_ck')){total++;if(v===true||v==='true')done++;}});
+  });
+  return total===0?0:Math.round((done/total)*100);
+}
+
+// ── TOAST ──
+function toast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast show'+(type?' '+type:'');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// ── BOOT ──
+sb.auth.onAuthStateChange(async(event,session)=>{if(session&&!currentUser)await goToSystemSelect(session.user);});
+(async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await goToSystemSelect(session.user);})();
+</script>
+</body>
+</html>
