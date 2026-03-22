@@ -1050,9 +1050,11 @@ function collectActivities(){const acts=[];document.querySelectorAll('[data-ai][
 function renderReportPanel(){
   const complete=calcProgress(auditData);
   const hasASN=asnUploaded||asnFileName;
+  const sys2=SYSTEMS[selectedSystem];
+  const st2=sys2?.stations[selectedStation]||{};
   return `<div class="report-panel">
     <div class="report-title">Generate Audit Report</div>
-    <div class="report-sub">Claude will analyse the completed audit data${hasASN?' and the uploaded As-Built document':''} to produce a professional Word report matching the Trigva report template. The report will include an executive summary, findings per section, risks and opportunities, and recommendations.</div>
+    <div class="report-sub">The report opens in a new browser tab. You can read it online, print it, or save it as a PDF using your browser.</div>
     <div style="display:flex;gap:16px;margin-bottom:20px">
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 20px;flex:1">
         <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Audit Progress</div>
@@ -1071,167 +1073,303 @@ function renderReportPanel(){
       </div>
     </div>
     ${!hasASN?`<div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.2);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--warn)">⚠ The As-Built document has not been uploaded. The report will be generated from audit data only. <span style="cursor:pointer;text-decoration:underline" onclick="reuploadASN()">Upload now</span> for a more complete report.</div>`:''}
-    <div class="report-progress" id="report-progress">Ready to generate. The report will be downloaded as a Word (.docx) file.</div>
+    <div class="report-progress" id="report-progress">Click Generate to build the report. It will open in a new tab.</div>
     <div style="display:flex;gap:10px;margin-top:16px">
-      <button class="btn btn-blue" style="width:auto;padding:10px 24px" onclick="generateReport()" id="gen-btn">Generate Word Report</button>
+      <button class="btn btn-blue" style="width:auto;padding:10px 24px" onclick="generateReport()" id="gen-btn">Generate Report</button>
       <button class="btn btn-outline btn-sm" onclick="saveAudit(true)">Save Audit First</button>
     </div>
   </div>`;
 }
 
 // ── REPORT GENERATION ──
-async function generateReport(){
-  await saveAudit();
-  const btn=document.getElementById('gen-btn');
-  const prog=document.getElementById('report-progress');
-  btn.disabled=true;
-  prog.className='report-progress generating';
-  prog.textContent='Preparing audit data…';
+function generateReport(){
   const sys=SYSTEMS[selectedSystem];
   const st=sys.stations[selectedStation];
-  const auditSummary=JSON.stringify(auditData,null,2);
-  const messages=[{role:'user',content:[
-    ...(asnFileBase64?[{type:'document',source:{type:'base64',media_type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',data:asnFileBase64}}]:[]),
-    {type:'text',text:`You are generating a professional Land Cable Route Audit Report for Trigva.
+  const ad=auditData;
+  const d=ad.info||{};
 
-CABLE SYSTEM: ${sys.name}
-STATION: ${selectedStation} — ${st.name}, ${st.country}
-AUDITOR(S): ${auditData.info?.auditors||'Not specified'}
-AUDIT DATE: ${auditData.info?.audit_date||'Not specified'}
-
-${asnFileBase64?'The ASN As-Built (Land Plant Installation Report) is attached. Use it to:\n- Pull the system introduction paragraph verbatim\n- Reference original installation values (splice losses, IR readings, GPS coordinates, spares delivered)\n- Compare As-Built values against current audit findings\n':'No As-Built document was provided.\n'}
-
-AUDIT DATA (JSON):
-${auditSummary}
-
-Generate a structured audit report in the following exact format. Write in professional technical English. Be specific and evidence-based.
-
----
-REPORT STRUCTURE:
-
-# ${sys.name} Land Cable Route Audit Report
-## ${st.name}, ${st.country}
-### Issue 01, ${new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'})}
-### Prepared by Trigva
-
----
-## 1. Introduction
-[Write 3-4 paragraphs describing the ${sys.name} cable system using the As-Built document. Include: system description, route, branching units, land cable configuration, earth return system, BMH location. If no As-Built, use audit info field for context.]
-
-## 2. Executive Summary
-[Write 8-10 bullet points covering: cable system overview, audit scope, spare cable condition, joint kits status, test equipment status, jointing support equipment, optical test results, route/manhole condition, key recommendations. Be specific using the audit data values.]
-
-## 3. Audit Overview
-[Brief paragraph on audit methodology, dates, team. List manhole GPS coordinates from audit data in a table: Manhole | Latitude | Longitude]
-
-## 4. Scope of Work
-
-### 4.1 Spare Cable
-**Overview:** [2-3 sentences on storage conditions, quantities, drum condition based on Section 2 data]
-**Risks and Opportunities:**
-- [List specific risks and recommendations from the data]
-
-### 4.2 Spare Joint Kits and Consumables
-**Overview:** [2-3 sentences on kit storage, quantities, completeness based on Section 3 data]
-**Risks and Opportunities:**
-- [List specific risks]
-
-### 4.3 Test Equipment
-**Overview:** [2-3 sentences on equipment found, calibration status based on Section 4 data]
-**Risks and Opportunities:**
-- [List items missing or needing attention]
-
-### 4.4 Jointing Support Equipment
-**Overview:** [2-3 sentences based on Section 5 data]
-**Risks and Opportunities:**
-- [List missing equipment]
-
-## 5. Test Results
-
-### 5.1 Insulation Resistance Results
-**Overview:** [Summarise IR test values from Section 9. Note pass/fail. Reference As-Built baseline if available.]
-**Risks and Opportunities:** [Nil if all passed, otherwise list concerns]
-
-### 5.2 Optical Results
-**Overview:** [Summarise fibre test results from Section 8. Count passes and fails. Note any anomalies.]
-**Risks and Opportunities:** [List any fibres that failed and recommended actions]
-
-## 6. Route Inspection
-**Overview:** [Summarise manhole condition from Section 6 — fronthaul patrol, security, manhole conditions]
-**Risks and Opportunities:** [List any issues found]
-
-## 7. Diary of Events
-[Format the daily activities from Section 11 as a table: Date | Activity | Location | Participants | Outcome]
-
-## 8. Summary and Opportunities
-[Write 2-3 substantial paragraphs summarising the overall condition, primary risks identified, and opportunities for improvement. Be specific. Reference actual values from the audit data.]
-
----
-End the report with: "Report generated by Trigva Audit Platform · ${new Date().toLocaleDateString()}"
-`}]}];
-  prog.textContent='Analysing audit data and As-Built document…';
-  try {
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':CLAUDE_API_KEY,'anthropic-version':'2023-06-01'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,messages})
-    });
-    const d=await resp.json();
-    if(d.error){throw new Error(d.error.message);}
-    const reportText=d.content.map(c=>c.text||'').join('');
-    prog.textContent='Building Word document…';
-    await buildWordDoc(reportText,sys,st);
-    prog.className='report-progress';
-    prog.textContent='✓ Report generated and downloaded successfully.';
-    toast('Report downloaded ✓','ok');
-  } catch(e){
-    prog.className='report-progress';
-    prog.textContent='Error: '+e.message;
-    toast('Report generation failed','err');
-  }
-  btn.disabled=false;
-}
-
-async function buildWordDoc(reportText,sys,st){
-  // Parse the report text into sections and create a downloadable .docx-like RTF
-  // Since we can't run Node.js here, we generate a rich HTML file that opens in Word
-  const htmlContent=`<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
+  const html=`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trigva Audit Report — ${sys.name} · ${st.name}</title>
 <style>
-body{font-family:Arial,sans-serif;font-size:12pt;margin:2.5cm;line-height:1.5;color:#000;}
-h1{font-size:20pt;font-weight:bold;color:#1F3864;border-bottom:2px solid #1F3864;padding-bottom:6pt;margin-top:24pt;}
-h2{font-size:16pt;font-weight:bold;color:#1F3864;margin-top:18pt;}
-h3{font-size:13pt;font-weight:bold;color:#2E4882;margin-top:12pt;}
-table{border-collapse:collapse;width:100%;margin:12pt 0;}
-th{background:#1F3864;color:#fff;padding:6pt 10pt;text-align:left;font-size:10pt;}
-td{border:1px solid #ccc;padding:5pt 10pt;font-size:10pt;}
-tr:nth-child(even) td{background:#f5f7fa;}
-ul{margin:6pt 0 12pt 20pt;}
-li{margin-bottom:4pt;}
-.cover{text-align:center;margin-top:4cm;}
-.cover h1{border:none;font-size:28pt;}
-.cover .sub{font-size:14pt;color:#555;margin:8pt 0;}
-.cover .meta{font-size:11pt;color:#777;margin-top:24pt;}
-strong{font-weight:bold;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,sans-serif;font-size:11pt;color:#1a1a1a;background:#fff;line-height:1.6;}
+  .page{max-width:210mm;margin:0 auto;padding:20mm 25mm;}
+  @media print{.page{padding:15mm 20mm;}.no-print{display:none!important;}@page{size:A4;margin:15mm 20mm;}}
+  .cover{text-align:center;padding:40mm 0 30mm;}
+  .cover-logo{font-size:11pt;letter-spacing:4px;text-transform:uppercase;color:#00a896;margin-bottom:16px;}
+  .cover-title{font-size:28pt;font-weight:700;color:#1F3864;margin-bottom:12px;line-height:1.2;}
+  .cover-sub{font-size:14pt;color:#444;margin-bottom:8px;}
+  .cover-meta{font-size:10pt;color:#777;margin-top:32px;line-height:2;}
+  .cover-line{width:60px;height:3px;background:#00a896;margin:20px auto;}
+  h1{font-size:16pt;font-weight:700;color:#1F3864;border-bottom:2px solid #1F3864;padding-bottom:6px;margin:28px 0 12px;}
+  h2{font-size:13pt;font-weight:700;color:#1F3864;margin:20px 0 8px;}
+  h3{font-size:11pt;font-weight:700;color:#2E4882;margin:14px 0 6px;}
+  p{margin-bottom:10px;}
+  ul{margin:6px 0 12px 20px;}
+  li{margin-bottom:4px;}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:10pt;}
+  th{background:#1F3864;color:#fff;padding:7px 10px;text-align:left;}
+  td{border:1px solid #ccc;padding:6px 10px;}
+  tr:nth-child(even) td{background:#f5f8fc;}
+  .badge{display:inline-block;padding:3px 10px;border-radius:4px;font-size:9pt;font-weight:600;margin-left:8px;}
+  .badge-pass{background:#dcfce7;color:#166534;}
+  .badge-fail{background:#fee2e2;color:#991b1b;}
+  .badge-na{background:#f1f5f9;color:#475569;}
+  .section-intro{background:#f8fafc;border-left:3px solid #00a896;padding:10px 14px;margin-bottom:16px;font-size:10pt;color:#444;}
+  .kv-table{width:100%;margin-bottom:16px;}
+  .kv-table td:first-child{font-weight:600;color:#444;width:35%;padding:5px 10px 5px 0;vertical-align:top;font-size:10pt;}
+  .kv-table td:last-child{padding:5px 0;font-size:10pt;}
+  .print-btn{position:fixed;bottom:24px;right:24px;background:#1F3864;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:12pt;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2);}
+  .print-btn:hover{background:#00a896;}
+  .footer{margin-top:40px;padding-top:12px;border-top:1px solid #ddd;font-size:9pt;color:#999;text-align:center;}
+  .page-break{page-break-before:always;}
 </style>
-</head><body>
+</head>
+<body>
+<button class="print-btn no-print" onclick="window.print()">🖨 Print / Save PDF</button>
+<div class="page">
+
+<!-- COVER -->
 <div class="cover">
-  <p style="font-size:11pt;color:#777;text-transform:uppercase;letter-spacing:3px">Trigva</p>
-  <h1>${sys.name} Land Cable Route Audit</h1>
-  <div class="sub">${st.name}, ${st.country}</div>
-  <div class="sub">Issue 01 · ${new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div>
-  <div class="meta">Prepared by Trigva<br>Audit Platform Report</div>
+  <div class="cover-logo">Trigva · Audit Platform</div>
+  <div class="cover-title">${sys.name}<br>Land Cable Route Audit</div>
+  <div class="cover-line"></div>
+  <div class="cover-sub">${st.name}, ${st.country}</div>
+  <div class="cover-meta">
+    Issue 01 · ${new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'})}<br>
+    Prepared by: ${d.auditors||'Trigva'}<br>
+    Audit Date: ${d.audit_date||'—'}<br>
+    Landing Party: ${d.landing_party||'—'}
+  </div>
 </div>
-<div style="page-break-before:always"></div>
-${markdownToHTML(reportText)}
-</body></html>`;
-  const blob=new Blob([htmlContent],{type:'application/msword'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=`Trigva_${sys.name.replace(/ /g,'_')}_${st.name.replace(/ /g,'_')}_Audit_Report_${new Date().toISOString().slice(0,10)}.doc`;
-  a.click();
-  URL.revokeObjectURL(url);
+
+<div class="page-break"></div>
+
+<!-- 1. INTRODUCTION -->
+<h1>1. Introduction</h1>
+<div class="section-intro">The following report documents the findings of the Land Cable Route (LCR) audit conducted at ${st.name}, ${st.country} for the ${sys.name} submarine cable system.</div>
+<p>The ${sys.name} submarine cable system connects ${sys.desc}. This audit inspected the land cable route infrastructure, spare assets, test equipment, jointing support equipment, and operational readiness at the ${st.name} Cable Landing Station (CLS).</p>
+<p>The land cable route connects the terminal equipment via the CTB at the terminal station with the marine cable at the beach manhole (BMH). The audit team verified spare cables and joints against installation records, assessed test equipment availability and calibration, and conducted a physical inspection of all manholes along the land route.</p>
+
+<!-- 2. AUDIT OVERVIEW -->
+<h1>2. Audit Overview</h1>
+<table class="kv-table">
+  <tr><td>Cable System</td><td>${sys.name}</td></tr>
+  <tr><td>Station</td><td>${selectedStation} — ${st.name}, ${st.country}</td></tr>
+  <tr><td>CLS Name</td><td>${d.cls_name||st.name}</td></tr>
+  <tr><td>Audit Date</td><td>${d.audit_date||'—'}</td></tr>
+  <tr><td>Auditors</td><td>${d.auditors||'—'}</td></tr>
+  <tr><td>Landing Party</td><td>${d.landing_party||'—'}</td></tr>
+  <tr><td>Cable Depot</td><td>${d.depot_name||'—'}</td></tr>
+  <tr><td>As-Built Document</td><td>${asnFileName||'Not provided'}</td></tr>
+</table>
+
+<!-- SITE INFO -->
+${(()=>{const s=ad.s1||{};if(!s.s1_cls)return '';return `<h2>Site Information</h2>
+<table class="kv-table">
+  <tr><td>CLS</td><td>${s.s1_cls||'—'}</td></tr>
+  <tr><td>Physical Address</td><td>${s.s1_cls_addr||'—'}</td></tr>
+  <tr><td>Beach / BMH</td><td>${s.s1_bmh||'—'}</td></tr>
+  <tr><td>CLS Staffing Level</td><td>${s.s1_staff||'—'}</td></tr>
+  <tr><td>NOC Location</td><td>${s.s1_noc||'—'}</td></tr>
+  <tr><td>Contact 1</td><td>${s.s1_c1n||'—'} ${s.s1_c1p?'· '+s.s1_c1p:''} ${s.s1_c1e?'· '+s.s1_c1e:''}</td></tr>
+  ${s.s1_c2n?`<tr><td>Contact 2</td><td>${s.s1_c2n} ${s.s1_c2p?'· '+s.s1_c2p:''}</td></tr>`:''}
+</table>`;})()}
+
+<!-- MANHOLE GPS TABLE -->
+${(()=>{const s=ad.s6||{};const mhs=s.manholes||[];if(!mhs.length)return '';
+const rows=mhs.map((mh,i)=>{const dd=mh.data||{};const id=mh.id;return `<tr><td>Manhole ${i+1}${dd['mh_'+id+'_num']?' — MH '+dd['mh_'+id+'_num']:''}</td><td>${dd['mh_'+id+'_lat']||'—'}</td><td>${dd['mh_'+id+'_lng']||'—'}</td></tr>`;}).join('');
+return `<h2>Manhole GPS Coordinates</h2><table><thead><tr><th>Manhole</th><th>Latitude</th><th>Longitude</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
+
+<div class="page-break"></div>
+
+<!-- 3. SCOPE OF WORK -->
+<h1>3. Scope of Work</h1>
+
+<!-- SPARE CABLE -->
+<h2>3.1 Spare Cable</h2>
+${(()=>{const s=ad.s2||{};return `
+<table class="kv-table">
+  <tr><td>Drum protection</td><td>${s.s2_cover||'—'}</td></tr>
+  <tr><td>Drum condition</td><td>${s.s2_cond||'—'}</td></tr>
+  <tr><td>Drum orientation</td><td>${s.s2_orient||'—'}</td></tr>
+  <tr><td>Fibre count</td><td>${s.s2_fibres||'—'}</td></tr>
+  <tr><td>OALC4 drums available</td><td>${s.s2_oalc4n||'—'}</td></tr>
+  <tr><td>OALC4 drum number</td><td>${s.s2_oalc4_dnum||'—'}</td></tr>
+  <tr><td>OALC4 length on drum</td><td>${s.s2_oalc4_len||'—'} m</td></tr>
+  <tr><td>Optical length (OTDR)</td><td>${s.s2_oalc4_otdr||'—'} m</td></tr>
+  <tr><td>Nexans drums available</td><td>${s.s2_nexn||'—'}</td></tr>
+  <tr><td>Cable end protection — OALC4</td><td>${s.s2_oalc4_ep||'—'}</td></tr>
+  <tr><td>Fibres ready for testing</td><td>${s.s2_oalc4_rdy||'—'}</td></tr>
+</table>
+${s.s2_comments?`<p><strong>Comments:</strong> ${s.s2_comments}</p>`:''}`;})()}
+
+<!-- JOINTING KITS -->
+<h2>3.2 Spare Joint Kits and Consumables</h2>
+${(()=>{const s=ad.s3||{};return `
+<table class="kv-table">
+  <tr><td>Kits covered/sheltered</td><td>${s.s3_prot||'—'}</td></tr>
+  <tr><td>OALC4 joints on site</td><td>${s.s3_o4qty||'—'}</td></tr>
+  <tr><td>BMH kits on site</td><td>${s.s3_bmhqty||'—'}</td></tr>
+  <tr><td>Earth kits on site</td><td>${s.s3_eqty||'—'}</td></tr>
+  <tr><td>OGB kits on site</td><td>${s.s3_ogbqty||'—'}</td></tr>
+  <tr><td>OALC4 boxes sealed</td><td>${s.s3_seal_0||'—'}</td></tr>
+  <tr><td>OALC4 stored in controlled environment</td><td>${s.s3_env_0||'—'}</td></tr>
+</table>
+${s.s3_comments?`<p><strong>Comments:</strong> ${s.s3_comments}</p>`:''}`;})()}
+
+<!-- TEST EQUIPMENT -->
+<h2>3.3 Test Equipment</h2>
+${(()=>{const s=ad.s4||{};
+const equip=['OTDR','Megger (IR Test Set)','Fibre Scope'];
+const rows=equip.map((name,i)=>`<tr><td>${name}</td><td>${s['s4_'+i+'_0']||'—'}</td><td>${s['s4_'+i+'_1']||'—'}</td><td>${s['s4_'+i+'_3']||'—'}</td><td>${s['s4_'+i+'_4']||'—'}</td></tr>`).join('');
+return `<table><thead><tr><th>Equipment</th><th>Make</th><th>Model</th><th>Calibration Date</th><th>Functional</th></tr></thead><tbody>${rows}</tbody></table>
+${s.s4_comments?`<p><strong>Comments:</strong> ${s.s4_comments}</p>`:''}`;})()}
+
+<!-- JOINTING SUPPORT -->
+<h2>3.4 Jointing Support Equipment</h2>
+${(()=>{const s=ad.s5||{};
+const items=['Gazebo tent with sides','Generator ≥3kW','Electrical extension cords >10m','Lights','Water pump','Spade','Manhole barriers & cones','Suitable ladder','Work benches ×2','Work table','Chairs ×2','Safety tripod','Manhole keys'];
+const rows=items.map((item,i)=>`<tr><td>${item}</td><td>${s['s5_'+i]||'—'}</td></tr>`).join('');
+return `<table><thead><tr><th>Item</th><th>Available</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
+
+<div class="page-break"></div>
+
+<!-- 4. TEST RESULTS -->
+<h1>4. Test Results</h1>
+
+<h2>4.1 Insulation Resistance Results</h2>
+${(()=>{const s=ad.s9||{};
+let rows='';
+for(let i=1;i<=4;i++){
+  const val=s['s9_o4d'+i+'_val'];
+  const pf=s['s9_o4d'+i+'_pf'];
+  if(val||pf)rows+=`<tr><td>OALC4 Drum ${i} — Screen to copper</td><td>${val||'—'}</td><td>${pf?`<span class="badge badge-${pf==='Pass'?'pass':'fail'}">${pf}</span>`:'—'}</td></tr>`;
+}
+for(let i=1;i<=4;i++){
+  const tests=[['Cond A to B','ab'],['Cond A to Arm','aa'],['Cond B to Arm','ba']];
+  tests.forEach(([label,key])=>{
+    const val=s['s9_nxd'+i+'_'+key];
+    const pf=s['s9_nxd'+i+'_'+key+'pf'];
+    if(val||pf)rows+=`<tr><td>Nexans Drum ${i} — ${label}</td><td>${val||'—'}</td><td>${pf?`<span class="badge badge-${pf==='Pass'?'pass':'fail'}">${pf}</span>`:'—'}</td></tr>`;
+  });
+}
+if(!rows)return '<p>No IR test data recorded.</p>';
+return `<table><thead><tr><th>Test</th><th>Value</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
+
+<h2>4.2 Optical / Fibre Test Results</h2>
+${(()=>{const s=ad.s8||{};
+let rows='';let passes=0;let fails=0;
+for(let i=1;i<=32;i++){
+  const col=s['s8_f'+i+'_col'];
+  const dist=s['s8_f'+i+'_dist'];
+  const pf=s['s8_f'+i+'_pf'];
+  const cmt=s['s8_f'+i+'_cmt'];
+  if(dist||pf){
+    if(pf==='Pass')passes++;
+    if(pf==='Fail')fails++;
+    rows+=`<tr><td>${i}</td><td>${col||'—'}</td><td>${dist||'—'}</td><td>${pf?`<span class="badge badge-${pf==='Pass'?'pass':'fail'}">${pf}</span>`:'—'}</td><td>${cmt||''}</td></tr>`;
+  }
+}
+if(!rows)return '<p>No fibre test data recorded.</p>';
+return `<p><strong>Summary:</strong> ${passes} passed, ${fails} failed out of ${passes+fails} tested.</p>
+<table><thead><tr><th>#</th><th>Colour</th><th>Distance (m)</th><th>Result</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
+
+<!-- 5. ROUTE INSPECTION -->
+<h1>5. Route Inspection</h1>
+${(()=>{const s=ad.s6||{};return `
+<table class="kv-table">
+  <tr><td>Route patrolled</td><td>${s.s6_patrol||'—'}</td></tr>
+  <tr><td>Route protected by security</td><td>${s.s6_sec||'—'}</td></tr>
+  <tr><td>Manholes regularly inspected</td><td>${s.s6_insp||'—'}</td></tr>
+  <tr><td>Registered with local authority</td><td>${s.s6_reg||'—'}</td></tr>
+  <tr><td>Fronthaul shared with others</td><td>${s.s6_shared||'—'}</td></tr>
+  <tr><td>3rd party construction notifications</td><td>${s.s6_3p||'—'}</td></tr>
+</table>
+${s.s6_comments?`<p><strong>Comments:</strong> ${s.s6_comments}</p>`:''}
+
+${(()=>{const mhs=s.manholes||[];if(!mhs.length)return '';
+return mhs.map((mh,idx)=>{const dd=mh.data||{};const id=mh.id;
+return `<h3>Manhole ${idx+1}${dd['mh_'+id+'_num']?' — MH '+dd['mh_'+id+'_num']:''}</h3>
+<table class="kv-table">
+  <tr><td>Coordinates</td><td>${dd['mh_'+id+'_lat']||'—'}, ${dd['mh_'+id+'_lng']||'—'}</td></tr>
+  <tr><td>Lid type</td><td>${dd['mh_'+id+'_ltype']||'—'}</td></tr>
+  <tr><td>Lid locked</td><td>${dd['mh_'+id+'_locked']||'—'}</td></tr>
+  <tr><td>Ducts & sleeves sealed</td><td>${dd['mh_'+id+'_ducts']||'—'}</td></tr>
+  <tr><td>Fills with water</td><td>${dd['mh_'+id+'_water']||'—'}</td></tr>
+  <tr><td>Inside dimensions</td><td>${dd['mh_'+id+'_dims']||'—'}</td></tr>
+  <tr><td>Cables labelled</td><td>${dd['mh_'+id+'_lab']||'—'}</td></tr>
+  <tr><td>24hr access</td><td>${dd['mh_'+id+'_24h']||'—'}</td></tr>
+</table>
+${dd['mh_'+id+'_comments']?`<p><strong>Comments:</strong> ${dd['mh_'+id+'_comments']}</p>`:''}`;}).join('');})()}`;})()}
+
+<!-- 6. RISK ASSESSMENT -->
+<h1>6. Risk Assessment</h1>
+${(()=>{const s=ad.s10||{};
+const cats=[
+  {t:'Construction Risks',start:0,count:6},
+  {t:'Security of Manhole Infrastructure',start:6,count:7},
+  {t:'Land Route Sharing',start:13,count:6},
+  {t:'Manhole Maintenance Tools',start:19,count:6},
+  {t:'Health & Safety (PPE)',start:25,count:7},
+  {t:'Environmental Risks',start:32,count:5}
+];
+const questions=[
+  'Ongoing/planned civil works near cable route?','Permits obtained for 3rd-party excavations?','Cable route registered as protected utility?','Warning signs/markers visible along route?','Landing party engaged local authorities?','Evidence of recent ground disturbance?',
+  'Manhole covers intact and properly seated?','Locking mechanisms installed and functional?','Evidence of unauthorised access or tampering?','Surrounding surfaces stable?','Manhole frames free of corrosion?','Manhole ID labels visible?','Routine inspection schedule in place?',
+  'Other network cables in same manholes?','Foreign cables organised and labelled?','Clear segregation between cables?','Unused cables removed or tied back?','Damage to submarine cable from crowding?','Responsibilities for shared manholes defined?',
+  'Opening tools available and working?','Ladders and barriers available?','Pumps for flooded manholes available?','Temporary lighting available?','Traffic management deployed?','Tools inspected and maintained?',
+  'All personnel wearing approved PPE?','H&S briefing before site entry?','Confined space procedures followed?','Gas detection performed?','Safety barriers and warning signs in use?','First aid kits available?','Safe access and egress to manholes?',
+  'Water ingress posing risk?','Oil/chemicals stored correctly?','Evidence of erosion?','Drainage systems functional?','Vegetation managed?'
+];
+return cats.map(cat=>{
+  const rows=[];
+  for(let i=cat.start;i<cat.start+cat.count;i++){
+    const ans=s['s10_'+i+'_ans'];
+    const cmt=s['s10_'+i+'_c'];
+    if(ans)rows.push(`<tr><td>${questions[i]}</td><td><span class="badge badge-${ans==='Yes'?'pass':ans==='No'?'fail':'na'}">${ans}</span></td><td>${cmt||''}</td></tr>`);
+  }
+  if(!rows.length)return '';
+  return `<h2>${cat.t}</h2><table><thead><tr><th>Item</th><th>Status</th><th>Comment</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}).join('');})()}
+
+<!-- 7. DIARY OF EVENTS -->
+<h1>7. Diary of Events</h1>
+${(()=>{const s=ad.s11||{};const acts=s.activities||[];
+if(!acts.length||!acts[0].date)return '<p>No diary entries recorded.</p>';
+const rows=acts.filter(a=>a.date||a.desc).map(a=>`<tr><td>${a.date||'—'}</td><td>${a.desc||'—'}</td><td>${a.loc||'—'}</td><td>${a.part||'—'}</td><td>${a.rem||'—'}</td></tr>`).join('');
+return `<table><thead><tr><th>Date</th><th>Activity</th><th>Location</th><th>Participants</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
+
+<!-- 8. TOOLS INVENTORY -->
+<h1>8. Tools Inventory</h1>
+${(()=>{const s=ad.s7||{};
+const tools=['Water pump pliers','Cutting pliers','Mini bolt cutters','Snipe nose pliers','Combination pliers','Electrical shears','Fixers snipers','Grip pliers','Screwdrivers','File flat','Measuring tape','Steel ruler','Stanley knife','Stanley blades','Hacksaw','Flat spanners','Allen keys','Adjustable spanner','Hammer','Mallet','Spirit level','Tool bag','Tool chest','Rachet ¼"','Universal bit holder','Rachet set','Crimping pliers','Nylon strap wrenches','C spanner','Digital caliper','Cable tie pliers','Cordless drill','SDS drill','Angle grinder','Heat gun','Portable lights','Battery charger','Drill set SDS','Dremel tool','Dremel mandrel','Dremel disk','Dremel shaft','Mobile workbench','Sheath stripper','Thermohydrometer','Bending claw','Needle file','Torque wrench 10-15Nm','Torque wrench 40-400Nm','Torque screwdriver 0.5-2.5Nm','Torque screwdriver 2-10Nm','Ratchet handle','10mm spanner','11mm spanner','13mm spanner','17mm spanner','19mm spanner','Socket adaptor','Toolbox','Mandrel','Wedge URC2','Kynar tool','OALC2 tool','Tin opener','Dryer tip','Spiral cutter','ALROC blades','Specific cutter','Tube cutter blades','Cable stripper','MK01A blade','Ripley WS50','WS50 blade','Dryer refill','Dryer','Hand pump','OCC-SC300 tool'];
+const present=tools.filter((_,i)=>s['s7_'+i]==='Yes').length;
+const absent=tools.filter((_,i)=>s['s7_'+i]==='No').length;
+if(!present&&!absent)return '<p>No tools data recorded.</p>';
+const missingTools=tools.filter((_,i)=>s['s7_'+i]==='No');
+return `<p><strong>Present:</strong> ${present} of ${tools.length} tools | <strong>Missing:</strong> ${absent}</p>
+${missingTools.length?`<p><strong>Missing items:</strong> ${missingTools.join(', ')}</p>`:''}`;})()}
+
+<div class="footer">
+  Report generated by Trigva Audit Platform · ${new Date().toLocaleDateString('en-GB')} · ${sys.name} · ${st.name}
+</div>
+
+</div>
+</body>
+</html>`;
+
+  const win=window.open('','_blank');
+  if(win){
+    win.document.write(html);
+    win.document.close();
+  } else {
+    alert('Please allow popups for this site to view the report.');
+  }
 }
 
 function markdownToHTML(md){
