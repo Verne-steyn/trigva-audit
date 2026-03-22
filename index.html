@@ -721,11 +721,11 @@ function buildSidebar(){
     <div class="sidebar-item" id="nav-${s.id}" onclick="renderSection('${s.id}')">
       <span class="snum">${String(i).padStart(2,'0')}</span>
       <span style="flex:1">${s.label}</span>
-      <span class="chk-badge none" id="badge-${s.id}"></span>
+      
     </div>`).join('');
 }
 
-function updateSidebarBadges(){
+function updateSidebarBadges(){return;//
   SECTIONS.forEach(s=>{
     const badge=document.getElementById(`badge-${s.id}`);
     if(!badge)return;
@@ -775,10 +775,10 @@ function inp(key,data,ph='',cls=''){return `<input class="row-input ${cls}" data
 function sel(key,data,opts){const v=data[key]||'';return `<select class="row-select" data-key="${key}"><option value="">—</option>${opts.map(o=>`<option${v===o?' selected':''}>${o}</option>`).join('')}</select>`;}
 function chk(key,data){const c=data[key]===true||data[key]==='true';return `<div class="checkbox${c?' checked':''}" onclick="toggleCheck(this,'${key}')" data-key="${key}"></div>`;}
 function toggleCheck(el,key){const c=el.classList.toggle('checked');(auditData[currentSection]=auditData[currentSection]||{})[key]=c;scheduleAutoSave();}
-function row(num,label,inputs,ck,data,hint=''){return `<div class="audit-row">
+function row(num,label,inputs,ck,data,hint=''){return `<div class="audit-row" style="grid-template-columns:28px 1fr">
   <div class="row-num">${num}</div>
   <div class="row-content"><div class="row-label">${label}</div>${hint?`<div class="row-hint">${hint}</div>`:''}<div class="row-inputs">${inputs}</div></div>
-  <div class="row-check">${chk(ck,data)}</div></div>`;}
+  </div>`;}
 function grp(title,rows){return `<div class="audit-group"><div class="audit-group-header">${title}</div>${rows}</div>`;}
 function comments(key,data){return `<div class="audit-group"><div class="audit-group-header">Comments / Recommendations</div><div style="padding:12px 16px"><textarea class="comments-area" data-key="${key}">${esc(data[key])}</textarea></div></div>`;}
 
@@ -980,12 +980,12 @@ function renderS8(data){
       <td><select data-key="s8_f${i}_pf" style="background:var(--bg);border:1px solid transparent;border-radius:4px;padding:4px 7px;font-size:12px;color:var(--text);font-family:var(--sans);outline:none;width:100%">
         <option value="">—</option><option${data[`s8_f${i}_pf`]==='Pass'?' selected':''}>Pass</option><option${data[`s8_f${i}_pf`]==='Fail'?' selected':''}>Fail</option></select></td>
       <td><input data-key="s8_f${i}_cmt" value="${esc(data[`s8_f${i}_cmt`]||'')}" placeholder="Comment"></td>
-      <td style="text-align:center">${chk(`s8_f${i}_ck`,data)}</td></tr>`;
+      </tr>`;
   }
   return `<div class="audit-group"><div class="audit-group-header">Fibre Test Results — 32 Fibres</div>
     <div style="padding:12px 16px;overflow-x:auto">
       <table class="fibre-table">
-        <thead><tr><th style="width:36px">#</th><th>Colour</th><th>Distance (m)</th><th>Pass / Fail</th><th>Comment</th><th>✓</th></tr></thead>
+        <thead><tr><th style="width:36px">#</th><th>Colour</th><th>Distance (m)</th><th>Pass / Fail</th><th>Comment</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div></div>`;
