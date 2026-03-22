@@ -395,6 +395,8 @@ const SECTIONS = [
   {id:'s9',   label:'IR Tests'},
   {id:'s10',  label:'Risk Assessment'},
   {id:'s11',  label:'Daily Activities'},
+  {id:'s12',  label:'Annex I — Photos'},
+  {id:'s13',  label:'Annex II — OTDR Traces'},
 ];
 
 // ── STATE ──
@@ -759,7 +761,7 @@ function renderSection(sId){
       ${sId==='s11'?'<button class="btn btn-sm btn-blue" style="width:auto;margin-left:4px" onclick="submitAudit()">Submit Audit</button>':''}
     </div></div>`;
   if(sId==='report'){content.innerHTML=hdr+renderReportPanel();return;}
-  const renders={info:renderAuditInfo,s1:renderS1,s2:renderS2,s3:renderS3,s4:renderS4,s5:renderS5,s6:renderS6,s7:renderS7,s8:renderS8,s9:renderS9,s10:renderS10,s11:renderS11};
+  const renders={info:renderAuditInfo,s1:renderS1,s2:renderS2,s3:renderS3,s4:renderS4,s5:renderS5,s6:renderS6,s7:renderS7,s8:renderS8,s9:renderS9,s10:renderS10,s11:renderS11,s12:renderS12,s13:renderS13};
   content.innerHTML=hdr+(renders[sId]?renders[sId](data):'');
   if(sId==='s6')renderManholeEvents();
   if(sId==='s11')renderActivityEvents();
@@ -1045,6 +1047,128 @@ function renderActivityEvents(){
 function addAct(){collectCurrentSection();(auditData.s11=auditData.s11||{}).activities=auditData.s11.activities||[];auditData.s11.activities.push({});renderSection('s11');}
 function removeAct(idx){collectCurrentSection();const a=(auditData.s11=auditData.s11||{}).activities=auditData.s11.activities||[];a.splice(idx,1);if(!a.length)a.push({});renderSection('s11');}
 function collectActivities(){const acts=[];document.querySelectorAll('[data-ai][data-af]').forEach(el=>{const i=parseInt(el.dataset.ai);acts[i]=acts[i]||{};acts[i][el.dataset.af]=el.value;});return acts;}
+
+// ── PHOTO CATEGORIES ──
+const PHOTO_CATS = [
+  { id:'drums',  label:'A. Cable Drums',         slots:[{id:'oalc4', label:'OALC4 Optical Drum'},{id:'nexans', label:'Nexans Electrical Cable'}] },
+  { id:'joints', label:'B. Jointing Kits',        slots:[{id:'oalc4jt', label:'Jointing Kits OALC4'},{id:'earthkt', label:'Earth Kits incl. Specific Earth Joint'}] },
+  { id:'vault',  label:'C. Vault & BMH (inside)', slots:[{id:'coiled', label:'Cable coiled inside manhole'},{id:'labels', label:'Labels on OALC4 & Nexans cables'}] },
+  { id:'bmhext', label:'D. BMH from outside',     slots:[{id:'lidclosed', label:'BMH lid closed'}] },
+  { id:'sleeve', label:'E. Cable Testing',        slots:[{id:'steelsleeve', label:'Cable testing steel sleeve'}] },
+];
+
+function renderS12(data){
+  const fibreCount = parseInt(auditData.s2?.s2_fibres||0);
+  let html = '';
+  PHOTO_CATS.forEach(cat => {
+    html += `<div class="audit-group"><div class="audit-group-header">${cat.label}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px">`;
+    cat.slots.forEach(slot => {
+      const imgKey = 'ph_'+slot.id+'_img';
+      const capKey = 'ph_'+slot.id+'_cap';
+      const existingImg = data[imgKey];
+      const existingCap = data[capKey]||slot.label;
+      html += `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="position:relative;background:var(--surface2);min-height:160px;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="document.getElementById('photo_${slot.id}').click()">
+          ${existingImg ? `<img src="${existingImg}" style="width:100%;height:160px;object-fit:cover;display:block">` : `<div style="text-align:center;color:var(--text3)"><div style="font-size:28px;margin-bottom:6px">📷</div><div style="font-size:11px">Click to upload</div></div>`}
+          <input type="file" id="photo_${slot.id}" accept="image/*" style="display:none" onchange="handlePhoto(this,'${slot.id}','${imgKey}','${capKey}')">
+        </div>
+        <div style="padding:8px">
+          <input class="row-input" data-key="${capKey}" value="${esc(existingCap)}" placeholder="Caption..." style="width:100%;font-size:12px">
+          ${existingImg ? `<div style="margin-top:6px;text-align:center"><button onclick="removePhoto('${slot.id}','${imgKey}')" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer">✕ Remove</button></div>` : ''}
+        </div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  return html;
+}
+
+function handlePhoto(input, slotId, imgKey, capKey) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    // Compress image to ~150dpi screen quality
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 800;
+      const scale = Math.min(1, maxW / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const compressed = canvas.toDataURL('image/jpeg', 0.6);
+      auditData.s12 = auditData.s12 || {};
+      auditData.s12[imgKey] = compressed;
+      scheduleAutoSave();
+      renderSection('s12');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePhoto(slotId, imgKey) {
+  if (auditData.s12) delete auditData.s12[imgKey];
+  scheduleAutoSave();
+  renderSection('s12');
+}
+
+function renderS13(data) {
+  const fibreCount = parseInt(auditData.s2?.s2_fibres || 0);
+  const mandatoryMsg = !fibreCount ? `<div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--warn)">⚠ Please enter the Fibre Count in <strong>Section 2 — Spare Cable</strong> first. The number of OTDR traces required is based on that value.</div>` : '';
+
+  const count = fibreCount || 4;
+  let html = mandatoryMsg;
+  html += `<div class="audit-group"><div class="audit-group-header">OTDR Traces — ${count} Fibre Pair${count!==1?'s':''} Expected</div><div style="padding:16px">`;
+
+  for (let i = 1; i <= count; i++) {
+    const fileKey = 'otdr_f'+i+'_file';
+    const nameKey = 'otdr_f'+i+'_name';
+    const labelKey = 'otdr_f'+i+'_label';
+    const existingName = data[nameKey];
+    const existingLabel = data[labelKey] || 'Fibre '+i;
+    html += `<div style="display:grid;grid-template-columns:1fr 2fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="font-family:var(--mono);font-size:12px;color:var(--text2)">Fibre ${i}</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${existingName
+          ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--success);flex:1">✓ ${existingName}</div>`
+          : `<label style="background:var(--surface2);border:1px dashed var(--border);border-radius:6px;padding:5px 12px;font-size:12px;color:var(--text2);cursor:pointer;flex:1;text-align:center">
+              + Upload PDF
+              <input type="file" accept=".pdf" style="display:none" onchange="handleOTDR(this,${i},'${fileKey}','${nameKey}')">
+            </label>`}
+        <input class="row-input" data-key="${labelKey}" value="${esc(existingLabel)}" placeholder="Label e.g. Blue fibre" style="min-width:140px;flex:1;font-size:12px">
+      </div>
+      ${existingName ? `<button onclick="removeOTDR(${i},'${fileKey}','${nameKey}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px">✕</button>` : '<div></div>'}
+    </div>`;
+  }
+  html += `</div></div>`;
+
+  const uploaded = Object.keys(data).filter(k=>k.startsWith('otdr_')&&k.endsWith('_file')).length;
+  html += `<div style="margin-top:12px;font-size:12px;color:var(--text2);font-family:var(--mono)">${uploaded} of ${count} traces uploaded</div>`;
+  return html;
+}
+
+function handleOTDR(input, fNum, fileKey, nameKey) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    auditData.s13 = auditData.s13 || {};
+    auditData.s13[fileKey] = e.target.result;
+    auditData.s13[nameKey] = file.name;
+    scheduleAutoSave();
+    renderSection('s13');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeOTDR(fNum, fileKey, nameKey) {
+  if (auditData.s13) { delete auditData.s13[fileKey]; delete auditData.s13[nameKey]; }
+  scheduleAutoSave();
+  renderSection('s13');
+}
 
 // ── REPORT PANEL ──
 function renderReportPanel(){
@@ -1354,6 +1478,49 @@ if(!present&&!absent)return '<p>No tools data recorded.</p>';
 const missingTools=tools.filter((_,i)=>s['s7_'+i]==='No');
 return `<p><strong>Present:</strong> ${present} of ${tools.length} tools | <strong>Missing:</strong> ${absent}</p>
 ${missingTools.length?`<p><strong>Missing items:</strong> ${missingTools.join(', ')}</p>`:''}`;})()}
+
+<!-- ANNEX I PHOTOS -->
+${(()=>{
+  const s=ad.s12||{};
+  const cats=[
+    {label:'A. Cable Drums',slots:[{id:'oalc4',label:'OALC4 Optical Drum'},{id:'nexans',label:'Nexans Electrical Cable'}]},
+    {label:'B. Jointing Kits',slots:[{id:'oalc4jt',label:'Jointing Kits OALC4'},{id:'earthkt',label:'Earth Kits incl. Specific Earth Joint'}]},
+    {label:'C. Vault & BMH (inside)',slots:[{id:'coiled',label:'Cable coiled inside manhole'},{id:'labels',label:'Labels on OALC4 & Nexans cables'}]},
+    {label:'D. BMH from outside',slots:[{id:'lidclosed',label:'BMH lid closed'}]},
+    {label:'E. Cable Testing',slots:[{id:'steelsleeve',label:'Cable testing steel sleeve'}]},
+  ];
+  const hasPhotos=cats.some(c=>c.slots.some(sl=>s['ph_'+sl.id+'_img']));
+  if(!hasPhotos)return '';
+  let out='<div class="page-break"></div><h1>Annex I — Photographs</h1>';
+  cats.forEach(cat=>{
+    const photos=cat.slots.filter(sl=>s['ph_'+sl.id+'_img']);
+    if(!photos.length)return;
+    out+='<h2>'+cat.label+'</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">';
+    photos.forEach(sl=>{
+      const img=s['ph_'+sl.id+'_img'];
+      const cap=s['ph_'+sl.id+'_cap']||sl.label;
+      out+='<div style="break-inside:avoid"><img src="'+img+'" style="width:100%;height:180px;object-fit:cover;border:1px solid #ddd;border-radius:4px;display:block"><p style="font-size:9pt;color:#555;margin-top:4px;text-align:center;font-style:italic">'+cap+'</p></div>';
+    });
+    out+='</div>';
+  });
+  return out;
+})()}
+
+<!-- ANNEX II OTDR -->
+${(()=>{
+  const s=ad.s13||{};
+  const keys=Object.keys(s).filter(k=>k.endsWith('_file'));
+  if(!keys.length)return '';
+  let out='<div class="page-break"></div><h1>Annex II — OTDR Traces</h1>';
+  keys.forEach(k=>{
+    const num=k.replace('otdr_f','').replace('_file','');
+    const label=s['otdr_f'+num+'_label']||('Fibre '+num);
+    const name=s['otdr_f'+num+'_name']||'';
+    const fd=s[k];
+    out+='<div style="margin-bottom:20px;break-inside:avoid"><h3>'+label+(name?' <span style="font-weight:400;font-size:9pt;color:#777">('+name+')</span>':'')+'</h3><iframe src="'+fd+'" style="width:100%;height:600px;border:1px solid #ddd;border-radius:4px" title="'+label+'"></iframe></div>';
+  });
+  return out;
+})()}
 
 <div class="footer">
   Report generated by Trigva Audit Platform · ${new Date().toLocaleDateString('en-GB')} · ${sys.name} · ${st.name}
