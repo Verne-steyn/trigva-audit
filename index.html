@@ -446,15 +446,25 @@ async function doReset(){
   await sb.auth.resetPasswordForEmail(email);
   setAuthMsg('Password reset email sent.','ok');
 }
-async function doSignout(){await sb.auth.signOut();location.reload();}
+async function doSignout(){
+  await sb.auth.signOut();
+  window.location.href=window.location.pathname;
+}
 
 // ── SYSTEM SELECT ──
 async function goToSystemSelect(user){
   currentUser=user;
-  const{data:profile}=await sb.from('trigva_profiles').select('*').eq('id',user.id).single();
-  userProfile=profile;
+  try {
+    const{data:profile}=await sb.from('trigva_profiles').select('*').eq('id',user.id).single();
+    userProfile=profile;
+  } catch(e) {
+    userProfile={id:user.id,email:user.email,name:user.email,role:'engineer'};
+  }
+  if(!userProfile){
+    userProfile={id:user.id,email:user.email,name:user.email,role:'engineer'};
+  }
   document.getElementById('auth-screen').style.display='none';
-  if(profile?.role==='supervisor'){
+  if(userProfile?.role==='supervisor'){
     initSupervisorApp();return;
   }
   buildSystemGrid();
