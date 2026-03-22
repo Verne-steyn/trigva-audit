@@ -461,14 +461,16 @@ async function doSignout(){
 // ── SYSTEM SELECT ──
 async function goToSystemSelect(user){
   currentUser=user;
+  // Use a default profile based on email, skip database lookup for now
+  userProfile={id:user.id,email:user.email,name:user.email.split('@')[0],role:'engineer'};
+  // Try to get profile but don't wait more than 3 seconds
   try {
-    const{data:profile}=await sb.from('trigva_profiles').select('*').eq('id',user.id).single();
-    userProfile=profile;
-  } catch(e) {
-    userProfile={id:user.id,email:user.email,name:user.email,role:'engineer'};
-  }
-  if(!userProfile){
-    userProfile={id:user.id,email:user.email,name:user.email,role:'engineer'};
+    const profilePromise=sb.from('trigva_profiles').select('*').eq('id',user.id).single();
+    const timeoutPromise=new Promise(resolve=>setTimeout(()=>resolve(null),3000));
+    const result=await Promise.race([profilePromise,timeoutPromise]);
+    if(result&&result.data){userProfile=result.data;}
+  } catch(e){
+    console.log('Profile lookup failed, using defaults');
   }
   document.getElementById('auth-screen').style.display='none';
   if(userProfile?.role==='supervisor'){
