@@ -228,14 +228,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="auth-title">Sign in</div>
     <div class="auth-sub">Cable Route Audit Management System</div>
     <div class="auth-tabs">
-      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
-      <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Register</button>
+      <button class="auth-tab active" id="tab-login">Sign In</button>
+      <button class="auth-tab" id="tab-register">Register</button>
     </div>
     <div id="login-form">
       <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
       <div class="field"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••"></div>
-      <button class="btn" onclick="doLogin()">Sign In</button>
-      <div style="margin-top:10px;text-align:center"><span style="font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline" onclick="doReset()">Forgot password?</span></div>
+      <button class="btn" id="login-btn">Sign In</button>
+      <div style="margin-top:10px;text-align:center"><span style="font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline" id="forgot-link">Forgot password?</span></div>
     </div>
     <div id="register-form" class="hidden">
       <div class="field"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
@@ -1559,6 +1559,16 @@ function toast(msg,type=''){
 }
 
 // ── BOOT ──
+document.addEventListener('DOMContentLoaded', () => {
+  // Wire auth tabs
+  document.getElementById('tab-login').addEventListener('click', () => switchTab('login'));
+  document.getElementById('tab-register').addEventListener('click', () => switchTab('register'));
+  // Wire login/register buttons
+  document.getElementById('login-btn').addEventListener('click', doLogin);
+  document.getElementById('reg-btn').addEventListener('click', doRegister);
+  document.getElementById('forgot-link').addEventListener('click', doReset);
+});
+
 sb.auth.onAuthStateChange(async(event,session)=>{if(session&&!currentUser)await goToSystemSelect(session.user);});
 (async()=>{const{data:{session}}=await sb.auth.getSession();if(session)await goToSystemSelect(session.user);})();
 </script>
