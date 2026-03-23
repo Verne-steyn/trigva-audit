@@ -225,26 +225,31 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 <div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">Trigva · Audit Platform</div>
-    <div class="auth-title">Sign in</div>
-    <div class="auth-sub">Cable Route Audit Management System</div>
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="tab-login">Sign In</button>
-      <button class="auth-tab" id="tab-register">Register</button>
-    </div>
     <div id="login-form">
+      <div class="auth-title">Sign In</div>
+      <div class="auth-sub">Cable Route Audit Management System</div>
       <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
       <div class="field"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••"></div>
       <button class="btn" id="login-btn">Sign In</button>
-      <div style="margin-top:10px;text-align:center"><span style="font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline" id="forgot-link">Forgot password?</span></div>
+      <div style="margin-top:12px;text-align:center">
+        <span style="font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline" id="forgot-link">Forgot password?</span>
+      </div>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+        <span style="font-size:13px;color:var(--text2)">No account? </span>
+        <a href="#" style="font-size:13px;color:var(--accent);font-weight:600" id="show-register">Register here →</a>
+      </div>
     </div>
     <div id="register-form" class="hidden">
+      <div class="auth-title">Create Account</div>
+      <div class="auth-sub">All accounts start as Field Engineer</div>
       <div class="field"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
       <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="work@email.com"></div>
       <div class="field"><label>Password</label><input type="password" id="reg-pass" placeholder="Min 8 characters"></div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text2)">
-        All accounts are created as <strong>Field Engineer</strong>. Supervisor access is granted by an existing Supervisor.
+      <button class="btn" id="reg-btn">Create Account</button>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+        <span style="font-size:13px;color:var(--text2)">Already registered? </span>
+        <a href="#" style="font-size:13px;color:var(--accent);font-weight:600" id="show-login">Sign in here →</a>
       </div>
-      <button class="btn" id="reg-btn" onclick="doRegister()">Create Account</button>
     </div>
     <div class="auth-msg" id="auth-msg"></div>
   </div>
@@ -1560,13 +1565,11 @@ function toast(msg,type=''){
 
 // ── BOOT ──
 document.addEventListener('DOMContentLoaded', () => {
-  // Wire auth tabs
-  document.getElementById('tab-login').addEventListener('click', () => switchTab('login'));
-  document.getElementById('tab-register').addEventListener('click', () => switchTab('register'));
-  // Wire login/register buttons
   document.getElementById('login-btn').addEventListener('click', doLogin);
   document.getElementById('reg-btn').addEventListener('click', doRegister);
-  document.getElementById('forgot-link').addEventListener('click', doReset);
+  document.getElementById('forgot-link').addEventListener('click', (e)=>{e.preventDefault();doReset();});
+  document.getElementById('show-register').addEventListener('click', (e)=>{e.preventDefault();switchTab('register');});
+  document.getElementById('show-login').addEventListener('click', (e)=>{e.preventDefault();switchTab('login');});
 });
 
 sb.auth.onAuthStateChange(async(event,session)=>{if(session&&!currentUser)await goToSystemSelect(session.user);});
