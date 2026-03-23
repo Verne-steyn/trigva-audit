@@ -301,6 +301,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="topbar-right">
       <div class="asn-indicator" id="asn-indicator" onclick="reuploadASN()">📄 As-Built Loaded</div>
       <div class="user-badge" id="user-badge"></div>
+      <button class="signout-btn" id="role-toggle-btn" onclick="toggleRole()" style="display:none;border-color:var(--accent);color:var(--accent)"></button>
       <button class="signout-btn" onclick="doSignout()">Sign out</button>
     </div>
   </div>
@@ -308,9 +309,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="sup-tab active" onclick="supSwitch('overview')" id="sup-tab-overview">Overview</div>
     <div class="sup-tab" onclick="supSwitch('audits')" id="sup-tab-audits">All Audits</div>
     <div class="sup-tab" onclick="supSwitch('users')" id="sup-tab-users">User Management</div>
-    <div style="margin-left:auto">
-      <button class="btn btn-outline btn-sm" onclick="switchToEngineerView()" style="font-size:12px;border-color:var(--accent);color:var(--accent)">⚙ Switch to Engineer View</button>
-    </div>
   </div>
   <div class="app-body">
     <div class="sidebar" id="sidebar">
@@ -411,6 +409,7 @@ let selectedSystem = null, selectedStation = null;
 let currentSection = 'info', auditData = {}, currentAuditId = null;
 let saveTimer = null, supView = 'overview';
 let asnFile = null, asnFileBase64 = null, asnFileName = null, asnUploaded = false;
+let currentView = 'engineer'; // tracks whether supervisor is in engineer or supervisor view
 
 // ── AUTH ──
 function switchTab(tab) {
@@ -675,6 +674,7 @@ function updateASNIndicator(){
 
 // ── ENGINEER APP ──
 async function initEngineerApp(){
+  currentView='engineer';
   const sys=SYSTEMS[selectedSystem];
   const st=sys.stations[selectedStation];
   document.getElementById('topbar-system').textContent=sys.name.toUpperCase();
@@ -684,19 +684,34 @@ async function initEngineerApp(){
   buildSidebar();
   await loadOrCreateAudit();
   document.getElementById('app').style.display='flex';
+  document.getElementById('sup-nav').classList.add('hidden');
+  document.getElementById('sidebar').classList.remove('hidden');
+  // Show toggle button only if user is a supervisor
+  const toggleBtn=document.getElementById('role-toggle-btn');
+  if(userProfile?.role==='supervisor'){
+    toggleBtn.style.display='';
+    toggleBtn.textContent='⭐ Supervisor View';
+  } else {
+    toggleBtn.style.display='none';
+  }
   renderSection('info');
 }
 
 // ── SUPERVISOR APP ──
 function initSupervisorApp(){
+  currentView='supervisor';
   document.getElementById('auth-screen').style.display='none';
+  document.getElementById('system-screen').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('topbar-system').textContent='ALL SYSTEMS';
-  document.getElementById('topbar-station').textContent='SUPERVISOR';
+  document.getElementById('topbar-station').textContent='SUPERVISOR VIEW';
   document.getElementById('user-badge').textContent=userProfile?.name||currentUser.email;
   document.getElementById('sup-nav').classList.remove('hidden');
   document.getElementById('sidebar').classList.add('hidden');
   document.getElementById('asn-indicator').classList.add('hidden');
+  const toggleBtn=document.getElementById('role-toggle-btn');
+  toggleBtn.style.display='';
+  toggleBtn.textContent='👷 Engineer View';
   renderSupervisor();
 }
 
@@ -1401,31 +1416,24 @@ return out;})()}
   else{alert('Please allow popups for this site to view the report.');}
 }
 
-// ── SUPERVISOR ──
-function switchToEngineerView(){
-  // Supervisor switches to engineer mode — go to system/station select
-  document.getElementById('sup-nav').classList.add('hidden');
-  document.getElementById('sidebar').classList.remove('hidden');
-  document.getElementById('asn-indicator').classList.remove('hidden');
-  buildSystemGrid();
-  document.getElementById('content').innerHTML='';
-  document.getElementById('system-screen').style.display='flex';
-  // Add a "Back to Supervisor" button on the system screen
-  const card=document.querySelector('.system-card');
-  if(!document.getElementById('back-to-sup')){
-    const btn=document.createElement('button');
-    btn.id='back-to-sup';
-    btn.className='btn btn-outline btn-sm';
-    btn.style='width:auto;margin-top:16px';
-    btn.textContent='← Back to Supervisor View';
-    btn.onclick=()=>{
-      document.getElementById('system-screen').style.display='none';
-      document.getElementById('sup-nav').classList.remove('hidden');
-      document.getElementById('sidebar').classList.add('hidden');
-      document.getElementById('asn-indicator').classList.add('hidden');
-      renderSupervisor();
-    };
-    card.appendChild(btn);
+// ── ROLE TOGGLE ──
+function toggleRole(){
+  if(currentView==='supervisor'){
+    // Switch to engineer view — go to system select
+    currentView='engineer';
+    document.getElementById('sup-nav').classList.add('hidden');
+    document.getElementById('sidebar').classList.remove('hidden');
+    document.getElementById('asn-indicator').classList.remove('hidden');
+    document.getElementById('role-toggle-btn').textContent='⭐ Supervisor View';
+    document.getElementById('topbar-system').textContent='';
+    document.getElementById('topbar-station').textContent='SELECT STATION';
+    document.getElementById('app').style.display='none';
+    selectedSystem=null; selectedStation=null;
+    buildSystemGrid();
+    document.getElementById('system-screen').style.display='flex';
+  } else {
+    // Switch back to supervisor view
+    initSupervisorApp();
   }
 }
 async function supSwitch(view){
