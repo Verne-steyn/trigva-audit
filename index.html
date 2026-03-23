@@ -240,13 +240,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div id="register-form" class="hidden">
       <div class="field"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
       <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="work@email.com"></div>
-      <div class="field"><label>Role</label>
-        <select id="reg-role">
-          <option value="engineer">Field Engineer</option>
-          <option value="supervisor">Supervisor</option>
-        </select>
-      </div>
       <div class="field"><label>Password</label><input type="password" id="reg-pass" placeholder="Min 8 characters"></div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text2)">
+        All accounts are created as <strong>Field Engineer</strong>. Supervisor access is granted by an existing Supervisor.
+      </div>
       <button class="btn" id="reg-btn" onclick="doRegister()">Create Account</button>
     </div>
     <div class="auth-msg" id="auth-msg"></div>
@@ -305,6 +302,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="sup-nav hidden" id="sup-nav">
     <div class="sup-tab active" onclick="supSwitch('overview')" id="sup-tab-overview">Overview</div>
     <div class="sup-tab" onclick="supSwitch('audits')" id="sup-tab-audits">All Audits</div>
+    <div class="sup-tab" onclick="supSwitch('users')" id="sup-tab-users">User Management</div>
+    <div style="margin-left:auto">
+      <button class="btn btn-outline btn-sm" onclick="switchToEngineerView()" style="font-size:12px;border-color:var(--accent);color:var(--accent)">⚙ Switch to Engineer View</button>
+    </div>
   </div>
   <div class="app-body">
     <div class="sidebar" id="sidebar">
@@ -438,8 +439,8 @@ async function doLogin(){
 async function doRegister(){
   const name=document.getElementById('reg-name').value.trim();
   const email=document.getElementById('reg-email').value.trim();
-  const role=document.getElementById('reg-role').value;
   const pass=document.getElementById('reg-pass').value;
+  const role='engineer'; // always register as engineer; supervisor promotes via admin panel
   if(!name||!email||!pass){setAuthMsg('Please fill in all fields.','error');return;}
   if(pass.length<8){setAuthMsg('Password must be at least 8 characters.','error');return;}
   
@@ -473,8 +474,6 @@ async function doRegister(){
         setAuthMsg('Account created! Taking you in…','ok');
         setTimeout(()=>goToSystemSelect(data.user),800);
       } else {
-        // Confirm email is ON — user needs to verify first
-        // But since we turned confirm OFF in Supabase, just sign them in directly
         setAuthMsg('Account created! Signing you in…','ok');
         setTimeout(async()=>{
           const{data:sd,error:se}=await sb.auth.signInWithPassword({email,password:pass});
@@ -1397,15 +1396,42 @@ return out;})()}
 }
 
 // ── SUPERVISOR ──
-async function renderSupervisor(){
-  if(supView==='overview')await renderSupOverview();
-  else await renderSupAudits();
+function switchToEngineerView(){
+  // Supervisor switches to engineer mode — go to system/station select
+  document.getElementById('sup-nav').classList.add('hidden');
+  document.getElementById('sidebar').classList.remove('hidden');
+  document.getElementById('asn-indicator').classList.remove('hidden');
+  buildSystemGrid();
+  document.getElementById('content').innerHTML='';
+  document.getElementById('system-screen').style.display='flex';
+  // Add a "Back to Supervisor" button on the system screen
+  const card=document.querySelector('.system-card');
+  if(!document.getElementById('back-to-sup')){
+    const btn=document.createElement('button');
+    btn.id='back-to-sup';
+    btn.className='btn btn-outline btn-sm';
+    btn.style='width:auto;margin-top:16px';
+    btn.textContent='← Back to Supervisor View';
+    btn.onclick=()=>{
+      document.getElementById('system-screen').style.display='none';
+      document.getElementById('sup-nav').classList.remove('hidden');
+      document.getElementById('sidebar').classList.add('hidden');
+      document.getElementById('asn-indicator').classList.add('hidden');
+      renderSupervisor();
+    };
+    card.appendChild(btn);
+  }
 }
 async function supSwitch(view){
   supView=view;
   document.querySelectorAll('.sup-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById(`sup-tab-${view}`).classList.add('active');
   await renderSupervisor();
+}
+async function renderSupervisor(){
+  if(supView==='overview')await renderSupOverview();
+  else if(supView==='audits')await renderSupAudits();
+  else if(supView==='users')await renderSupUsers();
 }
 async function renderSupOverview(){
   const content=document.getElementById('content');
@@ -1466,7 +1492,56 @@ async function renderSupAudits(){
   </div>`;
 }
 
-function calcProgress(dj){
+async function renderSupUsers(){
+  const content=document.getElementById('content');
+  content.innerHTML='<div class="loading"><div class="spinner"></div>Loading…</div>';
+  const{data:users,error}=await sb.from('trigva_profiles').select('*').order('name');
+  if(error){content.innerHTML=`<div style="padding:24px;color:var(--red)">Error loading users: ${error.message}</div>`;return;}
+  content.innerHTML=`
+    <div class="section-header">
+      <div><div class="section-title">User Management</div>
+      <div class="section-sub">Promote or demote users. Only Supervisors can access this panel.</div></div>
+    </div>
+    <div class="audit-list">
+      <div style="display:grid;grid-template-columns:2fr 2fr 1fr 1fr;padding:9px 16px;border-bottom:1px solid var(--border);background:var(--surface2);">
+        <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Name</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Email</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Role</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Action</span>
+      </div>
+      ${(users||[]).map(u=>{
+        const isSelf=u.id===currentUser.id;
+        const isSup=u.role==='supervisor';
+        return `<div style="display:grid;grid-template-columns:2fr 2fr 1fr 1fr;padding:12px 16px;border-bottom:1px solid var(--border);align-items:center;">
+          <span style="font-size:13px;font-weight:500">${u.name||'—'}${isSelf?' <span style="font-size:10px;color:var(--accent);font-family:var(--mono)">(you)</span>':''}</span>
+          <span style="font-size:12px;color:var(--text2);font-family:var(--mono)">${u.email||'—'}</span>
+          <span>
+            <div class="status-pill ${isSup?'complete':'draft'}" style="font-size:11px">
+              ${isSup?'⭐ Supervisor':'👷 Engineer'}
+            </div>
+          </span>
+          <span>
+            ${isSelf
+              ? `<span style="font-size:11px;color:var(--text3)">Cannot change own role</span>`
+              : isSup
+                ? `<button onclick="setUserRole('${u.id}','engineer')" class="btn btn-outline btn-sm" style="font-size:11px;color:var(--warn);border-color:var(--warn)">Demote to Engineer</button>`
+                : `<button onclick="setUserRole('${u.id}','supervisor')" class="btn btn-sm" style="font-size:11px;width:auto;background:var(--accent2);color:#fff">Promote to Supervisor</button>`
+            }
+          </span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:16px;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text2)">
+      <strong style="color:var(--text)">Note:</strong> Role changes take effect the next time the user signs in.
+    </div>`;
+}
+
+async function setUserRole(userId, newRole){
+  const{error}=await sb.from('trigva_profiles').update({role:newRole}).eq('id',userId);
+  if(error){toast('Error updating role: '+error.message,'err');return;}
+  toast(`User ${newRole==='supervisor'?'promoted to Supervisor':'demoted to Engineer'} ✓`,'ok');
+  await renderSupUsers();
+}
   if(!dj)return 0;
   let total=0,done=0;
   Object.values(dj).forEach(sec=>{
