@@ -24,7 +24,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .auth-title{font-size:24px;font-weight:600;margin-bottom:4px;}
 .auth-sub{font-size:13px;color:var(--text2);margin-bottom:32px;}
 .auth-tabs{display:flex;gap:2px;background:var(--bg);border-radius:8px;padding:3px;margin-bottom:24px;}
-.auth-tab{flex:1;padding:8px;text-align:center;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;}
+.auth-tab{flex:1;padding:8px;text-align:center;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;background:none;border:none;font-family:var(--sans);}
 .auth-tab.active{background:var(--surface2);color:var(--text);font-weight:500;}
 .field{margin-bottom:16px;}
 .field label{display:block;font-size:12px;font-weight:500;color:var(--text2);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase;}
@@ -228,8 +228,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="auth-title">Sign in</div>
     <div class="auth-sub">Cable Route Audit Management System</div>
     <div class="auth-tabs">
-      <div class="auth-tab active" onclick="switchTab('login')">Sign In</div>
-      <div class="auth-tab" onclick="switchTab('register')">Register</div>
+      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
+      <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Register</button>
     </div>
     <div id="login-form">
       <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
@@ -409,7 +409,8 @@ let asnFile = null, asnFileBase64 = null, asnFileName = null, asnUploaded = fals
 
 // ── AUTH ──
 function switchTab(tab) {
-  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='register')));
+  document.getElementById('tab-login').classList.toggle('active', tab==='login');
+  document.getElementById('tab-register').classList.toggle('active', tab==='register');
   document.getElementById('login-form').classList.toggle('hidden',tab!=='login');
   document.getElementById('register-form').classList.toggle('hidden',tab!=='register');
   setAuthMsg('','');
