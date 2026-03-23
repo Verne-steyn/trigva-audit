@@ -1548,6 +1548,8 @@ async function setUserRole(userId, newRole){
   toast(`User ${newRole==='supervisor'?'promoted to Supervisor':'demoted to Engineer'} ✓`,'ok');
   await renderSupUsers();
 }
+
+function calcProgress(dj){
   if(!dj)return 0;
   let total=0,done=0;
   Object.values(dj).forEach(sec=>{
