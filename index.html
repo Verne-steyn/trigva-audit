@@ -212,7 +212,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 #toast.show{opacity:1;transform:translateY(0);}
 #toast.ok{border-color:var(--success);color:var(--success);}
 #toast.err{border-color:var(--red);color:var(--red);}
-.loading{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--text2);font-family:var(--mono);font-size:13px;}
+.loading{display:flex;align-items:center;justify-content:padding:60px;color:var(--text2);font-family:var(--mono);font-size:13px;}
 .spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:10px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .hidden{display:none!important;}
@@ -247,7 +247,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
         </select>
       </div>
       <div class="field"><label>Password</label><input type="password" id="reg-pass" placeholder="Min 8 characters"></div>
-      <button class="btn" onclick="doRegister()">Create Account</button>
+      <button class="btn" id="reg-btn" onclick="doRegister()">Create Account</button>
     </div>
     <div class="auth-msg" id="auth-msg"></div>
   </div>
@@ -433,6 +433,8 @@ async function doLogin(){
     setAuthMsg(e.message,'error');
   }
 }
+
+// ── FIXED REGISTER FUNCTION ──
 async function doRegister(){
   const name=document.getElementById('reg-name').value.trim();
   const email=document.getElementById('reg-email').value.trim();
@@ -440,15 +442,57 @@ async function doRegister(){
   const pass=document.getElementById('reg-pass').value;
   if(!name||!email||!pass){setAuthMsg('Please fill in all fields.','error');return;}
   if(pass.length<8){setAuthMsg('Password must be at least 8 characters.','error');return;}
+  
+  const btn=document.getElementById('reg-btn');
+  btn.disabled=true;
   setAuthMsg('Creating account…','');
-  const{data,error}=await sb.auth.signUp({email,password:pass});
-  if(error){setAuthMsg(error.message,'error');return;}
-  if(data.user){
-    await sb.from('trigva_profiles').upsert({id:data.user.id,name,email,role});
-    setAuthMsg('Account created! Check your email to confirm, then sign in.','ok');
-    switchTab('login');
+  
+  try {
+    const{data,error}=await sb.auth.signUp({
+      email,
+      password:pass,
+      options:{data:{full_name:name,role}}
+    });
+    
+    if(error){
+      setAuthMsg(error.message,'error');
+      btn.disabled=false;
+      return;
+    }
+    
+    if(data&&data.user){
+      // Save profile - non-blocking, don't let failure stop the flow
+      try{
+        await sb.from('trigva_profiles').upsert({id:data.user.id,name,email,role});
+      }catch(pe){
+        console.warn('Profile save failed (non-fatal):',pe);
+      }
+      
+      // If confirm email is OFF, Supabase returns a session immediately
+      if(data.session){
+        setAuthMsg('Account created! Taking you in…','ok');
+        setTimeout(()=>goToSystemSelect(data.user),800);
+      } else {
+        // Confirm email is ON — user needs to verify first
+        // But since we turned confirm OFF in Supabase, just sign them in directly
+        setAuthMsg('Account created! Signing you in…','ok');
+        setTimeout(async()=>{
+          const{data:sd,error:se}=await sb.auth.signInWithPassword({email,password:pass});
+          if(se){setAuthMsg('Account created! Please sign in.','ok');switchTab('login');}
+          else{await goToSystemSelect(sd.user);}
+        },800);
+      }
+    } else {
+      setAuthMsg('Registration failed. Please try again.','error');
+      btn.disabled=false;
+    }
+  } catch(e){
+    setAuthMsg('Error: '+e.message,'error');
+    console.error('doRegister error:',e);
+    btn.disabled=false;
   }
 }
+
 async function doReset(){
   const email=document.getElementById('login-email').value.trim();
   if(!email){setAuthMsg('Enter your email first.','error');return;}
@@ -463,9 +507,7 @@ async function doSignout(){
 // ── SYSTEM SELECT ──
 async function goToSystemSelect(user){
   currentUser=user;
-  // Use a default profile based on email, skip database lookup for now
   userProfile={id:user.id,email:user.email,name:user.email.split('@')[0],role:'engineer'};
-  // Try to get profile but don't wait more than 3 seconds
   try {
     const profilePromise=sb.from('trigva_profiles').select('*').eq('id',user.id).single();
     const timeoutPromise=new Promise(resolve=>setTimeout(()=>resolve(null),3000));
@@ -498,7 +540,6 @@ function buildSystemGrid(){
     };
     grid.appendChild(btn);
   });
-  // Add more button
   const add=document.createElement('div');
   add.className='system-btn system-btn-add';
   add.innerHTML='<span style="font-size:20px;opacity:.4">+</span><span>More systems<br><span style="font-size:11px;opacity:.6">Contact Trigva to add</span></span>';
@@ -508,7 +549,6 @@ function buildSystemGrid(){
 function proceedToStation(){
   if(!selectedSystem)return;
   const sys=SYSTEMS[selectedSystem];
-  // Show station selection inside system screen
   const grid=document.getElementById('system-grid');
   grid.innerHTML='';
   document.querySelector('.system-title').textContent=`Select Station — ${sys.name}`;
@@ -529,7 +569,6 @@ function proceedToStation(){
   });
   document.getElementById('system-next-btn').textContent='Continue →';
   document.getElementById('system-next-btn').onclick=showASNUpload;
-  // Back button
   const back=document.createElement('button');
   back.className='btn btn-outline btn-sm';
   back.style='width:auto;margin-top:10px';
@@ -579,7 +618,6 @@ function handleASNFile(file){
   const fn=document.getElementById('upload-filename');
   fn.textContent='✓ '+file.name;
   fn.classList.remove('hidden');
-  // Read as base64
   const reader=new FileReader();
   reader.onload=e=>{
     asnFileBase64=e.target.result.split(',')[1];
@@ -609,7 +647,6 @@ function reuploadASN(){
   showASNUpload();
   document.getElementById('asn-proceed-btn').onclick=async()=>{
     document.getElementById('asn-screen').style.display='none';
-    // Update ASN in current audit
     if(currentAuditId&&asnFileBase64){
       await sb.from('trigva_audits').update({asn_filename:asnFileName,asn_base64:asnFileBase64}).eq('id',currentAuditId);
       updateASNIndicator();
@@ -667,7 +704,6 @@ async function loadOrCreateAudit(){
     currentAuditId=data[0].id;
     auditData=data[0].data_json||{};
     if(data[0].asn_filename){asnFileName=data[0].asn_filename;asnUploaded=true;}
-    // Save new ASN if just uploaded
     if(asnFileBase64){
       await sb.from('trigva_audits').update({asn_filename:asnFileName,asn_base64:asnFileBase64}).eq('id',currentAuditId);
     }
@@ -723,22 +759,10 @@ function buildSidebar(){
     <div class="sidebar-item" id="nav-${s.id}" onclick="renderSection('${s.id}')">
       <span class="snum">${String(i).padStart(2,'0')}</span>
       <span style="flex:1">${s.label}</span>
-      
     </div>`).join('');
 }
 
-function updateSidebarBadges(){return;//
-  SECTIONS.forEach(s=>{
-    const badge=document.getElementById(`badge-${s.id}`);
-    if(!badge)return;
-    const sd=auditData[s.id]||{};
-    const all=Object.keys(sd).filter(k=>k.endsWith('_check'));
-    const done=all.filter(k=>sd[k]===true||sd[k]==='true');
-    if(!all.length){badge.className='chk-badge none';badge.textContent='';return;}
-    if(done.length===all.length){badge.className='chk-badge done';badge.textContent='✓';}
-    else{badge.className='chk-badge partial';badge.textContent=done.length;}
-  });
-}
+function updateSidebarBadges(){return;}
 
 // ── SECTION RENDER ──
 function renderSection(sId){
@@ -1058,7 +1082,6 @@ const PHOTO_CATS = [
 ];
 
 function renderS12(data){
-  const fibreCount = parseInt(auditData.s2?.s2_fibres||0);
   let html = '';
   PHOTO_CATS.forEach(cat => {
     html += `<div class="audit-group"><div class="audit-group-header">${cat.label}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px">`;
@@ -1088,7 +1111,6 @@ function handlePhoto(input, slotId, imgKey, capKey) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    // Compress image to ~150dpi screen quality
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
@@ -1118,11 +1140,9 @@ function removePhoto(slotId, imgKey) {
 function renderS13(data) {
   const fibreCount = parseInt(auditData.s2?.s2_fibres || 0);
   const mandatoryMsg = !fibreCount ? `<div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--warn)">⚠ Please enter the Fibre Count in <strong>Section 2 — Spare Cable</strong> first. The number of OTDR traces required is based on that value.</div>` : '';
-
   const count = fibreCount || 4;
   let html = mandatoryMsg;
   html += `<div class="audit-group"><div class="audit-group-header">OTDR Traces — ${count} Fibre Pair${count!==1?'s':''} Expected</div><div style="padding:16px">`;
-
   for (let i = 1; i <= count; i++) {
     const fileKey = 'otdr_f'+i+'_file';
     const nameKey = 'otdr_f'+i+'_name';
@@ -1144,7 +1164,6 @@ function renderS13(data) {
     </div>`;
   }
   html += `</div></div>`;
-
   const uploaded = Object.keys(data).filter(k=>k.startsWith('otdr_')&&k.endsWith('_file')).length;
   html += `<div style="margin-top:12px;font-size:12px;color:var(--text2);font-family:var(--mono)">${uploaded} of ${count} traces uploaded</div>`;
   return html;
@@ -1216,7 +1235,6 @@ function generateReport(){
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Trigva Audit Report — ${sys.name} · ${st.name}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -1233,8 +1251,7 @@ function generateReport(){
   h2{font-size:13pt;font-weight:700;color:#1F3864;margin:20px 0 8px;}
   h3{font-size:11pt;font-weight:700;color:#2E4882;margin:14px 0 6px;}
   p{margin-bottom:10px;}
-  ul{margin:6px 0 12px 20px;}
-  li{margin-bottom:4px;}
+  ul{margin:6px 0 12px 20px;}li{margin-bottom:4px;}
   table{border-collapse:collapse;width:100%;margin:12px 0;font-size:10pt;}
   th{background:#1F3864;color:#fff;padding:7px 10px;text-align:left;}
   td{border:1px solid #ccc;padding:6px 10px;}
@@ -1243,12 +1260,10 @@ function generateReport(){
   .badge-pass{background:#dcfce7;color:#166534;}
   .badge-fail{background:#fee2e2;color:#991b1b;}
   .badge-na{background:#f1f5f9;color:#475569;}
-  .section-intro{background:#f8fafc;border-left:3px solid #00a896;padding:10px 14px;margin-bottom:16px;font-size:10pt;color:#444;}
   .kv-table{width:100%;margin-bottom:16px;}
   .kv-table td:first-child{font-weight:600;color:#444;width:35%;padding:5px 10px 5px 0;vertical-align:top;font-size:10pt;}
   .kv-table td:last-child{padding:5px 0;font-size:10pt;}
-  .print-btn{position:fixed;bottom:24px;right:24px;background:#1F3864;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:12pt;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2);}
-  .print-btn:hover{background:#00a896;}
+  .print-btn{position:fixed;bottom:24px;right:24px;background:#1F3864;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:12pt;cursor:pointer;}
   .footer{margin-top:40px;padding-top:12px;border-top:1px solid #ddd;font-size:9pt;color:#999;text-align:center;}
   .page-break{page-break-before:always;}
 </style>
@@ -1256,8 +1271,6 @@ function generateReport(){
 <body>
 <button class="print-btn no-print" onclick="window.print()">🖨 Print / Save PDF</button>
 <div class="page">
-
-<!-- COVER -->
 <div class="cover">
   <div class="cover-logo">Trigva · Audit Platform</div>
   <div class="cover-title">${sys.name}<br>Land Cable Route Audit</div>
@@ -1270,291 +1283,117 @@ function generateReport(){
     Landing Party: ${d.landing_party||'—'}
   </div>
 </div>
-
 <div class="page-break"></div>
-
-<!-- 1. INTRODUCTION -->
 <h1>1. Introduction</h1>
-<div class="section-intro">The following report documents the findings of the Land Cable Route (LCR) audit conducted at ${st.name}, ${st.country} for the ${sys.name} submarine cable system.</div>
+<p>The following report documents the findings of the Land Cable Route (LCR) audit conducted at ${st.name}, ${st.country} for the ${sys.name} submarine cable system.</p>
 <p>The ${sys.name} submarine cable system connects ${sys.desc}. This audit inspected the land cable route infrastructure, spare assets, test equipment, jointing support equipment, and operational readiness at the ${st.name} Cable Landing Station (CLS).</p>
-<p>The land cable route connects the terminal equipment via the CTB at the terminal station with the marine cable at the beach manhole (BMH). The audit team verified spare cables and joints against installation records, assessed test equipment availability and calibration, and conducted a physical inspection of all manholes along the land route.</p>
-
-<!-- 2. AUDIT OVERVIEW -->
 <h1>2. Audit Overview</h1>
 <table class="kv-table">
   <tr><td>Cable System</td><td>${sys.name}</td></tr>
   <tr><td>Station</td><td>${selectedStation} — ${st.name}, ${st.country}</td></tr>
-  <tr><td>CLS Name</td><td>${d.cls_name||st.name}</td></tr>
   <tr><td>Audit Date</td><td>${d.audit_date||'—'}</td></tr>
   <tr><td>Auditors</td><td>${d.auditors||'—'}</td></tr>
   <tr><td>Landing Party</td><td>${d.landing_party||'—'}</td></tr>
-  <tr><td>Cable Depot</td><td>${d.depot_name||'—'}</td></tr>
   <tr><td>As-Built Document</td><td>${asnFileName||'Not provided'}</td></tr>
 </table>
-
-<!-- SITE INFO -->
-${(()=>{const s=ad.s1||{};if(!s.s1_cls)return '';return `<h2>Site Information</h2>
-<table class="kv-table">
+${(()=>{const s=ad.s1||{};if(!s.s1_cls)return '';return `<h2>Site Information</h2><table class="kv-table">
   <tr><td>CLS</td><td>${s.s1_cls||'—'}</td></tr>
   <tr><td>Physical Address</td><td>${s.s1_cls_addr||'—'}</td></tr>
   <tr><td>Beach / BMH</td><td>${s.s1_bmh||'—'}</td></tr>
   <tr><td>CLS Staffing Level</td><td>${s.s1_staff||'—'}</td></tr>
-  <tr><td>NOC Location</td><td>${s.s1_noc||'—'}</td></tr>
-  <tr><td>Contact 1</td><td>${s.s1_c1n||'—'} ${s.s1_c1p?'· '+s.s1_c1p:''} ${s.s1_c1e?'· '+s.s1_c1e:''}</td></tr>
-  ${s.s1_c2n?`<tr><td>Contact 2</td><td>${s.s1_c2n} ${s.s1_c2p?'· '+s.s1_c2p:''}</td></tr>`:''}
+  <tr><td>Contact 1</td><td>${s.s1_c1n||'—'} ${s.s1_c1p?'· '+s.s1_c1p:''}</td></tr>
 </table>`;})()}
-
-<!-- MANHOLE GPS TABLE -->
-${(()=>{const s=ad.s6||{};const mhs=s.manholes||[];if(!mhs.length)return '';
-const rows=mhs.map((mh,i)=>{const dd=mh.data||{};const id=mh.id;return `<tr><td>Manhole ${i+1}${dd['mh_'+id+'_num']?' — MH '+dd['mh_'+id+'_num']:''}</td><td>${dd['mh_'+id+'_lat']||'—'}</td><td>${dd['mh_'+id+'_lng']||'—'}</td></tr>`;}).join('');
-return `<h2>Manhole GPS Coordinates</h2><table><thead><tr><th>Manhole</th><th>Latitude</th><th>Longitude</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
-
 <div class="page-break"></div>
-
-<!-- 3. SCOPE OF WORK -->
 <h1>3. Scope of Work</h1>
-
-<!-- SPARE CABLE -->
 <h2>3.1 Spare Cable</h2>
-${(()=>{const s=ad.s2||{};return `
-<table class="kv-table">
+${(()=>{const s=ad.s2||{};return `<table class="kv-table">
   <tr><td>Drum protection</td><td>${s.s2_cover||'—'}</td></tr>
-  <tr><td>Drum condition</td><td>${s.s2_cond||'—'}</td></tr>
-  <tr><td>Drum orientation</td><td>${s.s2_orient||'—'}</td></tr>
   <tr><td>Fibre count</td><td>${s.s2_fibres||'—'}</td></tr>
-  <tr><td>OALC4 drums available</td><td>${s.s2_oalc4n||'—'}</td></tr>
-  <tr><td>OALC4 drum number</td><td>${s.s2_oalc4_dnum||'—'}</td></tr>
-  <tr><td>OALC4 length on drum</td><td>${s.s2_oalc4_len||'—'} m</td></tr>
+  <tr><td>OALC4 drums</td><td>${s.s2_oalc4n||'—'}</td></tr>
+  <tr><td>OALC4 drum no.</td><td>${s.s2_oalc4_dnum||'—'}</td></tr>
+  <tr><td>OALC4 length</td><td>${s.s2_oalc4_len||'—'} m</td></tr>
   <tr><td>Optical length (OTDR)</td><td>${s.s2_oalc4_otdr||'—'} m</td></tr>
-  <tr><td>Nexans drums available</td><td>${s.s2_nexn||'—'}</td></tr>
   <tr><td>Cable end protection — OALC4</td><td>${s.s2_oalc4_ep||'—'}</td></tr>
-  <tr><td>Fibres ready for testing</td><td>${s.s2_oalc4_rdy||'—'}</td></tr>
-</table>
-${s.s2_comments?`<p><strong>Comments:</strong> ${s.s2_comments}</p>`:''}`;})()}
-
-<!-- JOINTING KITS -->
-<h2>3.2 Spare Joint Kits and Consumables</h2>
-${(()=>{const s=ad.s3||{};return `
-<table class="kv-table">
-  <tr><td>Kits covered/sheltered</td><td>${s.s3_prot||'—'}</td></tr>
-  <tr><td>OALC4 joints on site</td><td>${s.s3_o4qty||'—'}</td></tr>
-  <tr><td>BMH kits on site</td><td>${s.s3_bmhqty||'—'}</td></tr>
-  <tr><td>Earth kits on site</td><td>${s.s3_eqty||'—'}</td></tr>
-  <tr><td>OGB kits on site</td><td>${s.s3_ogbqty||'—'}</td></tr>
-  <tr><td>OALC4 boxes sealed</td><td>${s.s3_seal_0||'—'}</td></tr>
-  <tr><td>OALC4 stored in controlled environment</td><td>${s.s3_env_0||'—'}</td></tr>
-</table>
-${s.s3_comments?`<p><strong>Comments:</strong> ${s.s3_comments}</p>`:''}`;})()}
-
-<!-- TEST EQUIPMENT -->
+</table>${s.s2_comments?`<p><strong>Comments:</strong> ${s.s2_comments}</p>`:''}`;})()}
+<h2>3.2 Jointing Kits</h2>
+${(()=>{const s=ad.s3||{};return `<table class="kv-table">
+  <tr><td>Kits sheltered</td><td>${s.s3_prot||'—'}</td></tr>
+  <tr><td>OALC4 joints</td><td>${s.s3_o4qty||'—'}</td></tr>
+  <tr><td>BMH kits</td><td>${s.s3_bmhqty||'—'}</td></tr>
+  <tr><td>Earth kits</td><td>${s.s3_eqty||'—'}</td></tr>
+  <tr><td>OGB kits</td><td>${s.s3_ogbqty||'—'}</td></tr>
+</table>${s.s3_comments?`<p><strong>Comments:</strong> ${s.s3_comments}</p>`:''}`;})()}
 <h2>3.3 Test Equipment</h2>
 ${(()=>{const s=ad.s4||{};
 const equip=['OTDR','Megger (IR Test Set)','Fibre Scope'];
 const rows=equip.map((name,i)=>`<tr><td>${name}</td><td>${s['s4_'+i+'_0']||'—'}</td><td>${s['s4_'+i+'_1']||'—'}</td><td>${s['s4_'+i+'_3']||'—'}</td><td>${s['s4_'+i+'_4']||'—'}</td></tr>`).join('');
-return `<table><thead><tr><th>Equipment</th><th>Make</th><th>Model</th><th>Calibration Date</th><th>Functional</th></tr></thead><tbody>${rows}</tbody></table>
-${s.s4_comments?`<p><strong>Comments:</strong> ${s.s4_comments}</p>`:''}`;})()}
-
-<!-- JOINTING SUPPORT -->
-<h2>3.4 Jointing Support Equipment</h2>
-${(()=>{const s=ad.s5||{};
-const items=['Gazebo tent with sides','Generator ≥3kW','Electrical extension cords >10m','Lights','Water pump','Spade','Manhole barriers & cones','Suitable ladder','Work benches ×2','Work table','Chairs ×2','Safety tripod','Manhole keys'];
-const rows=items.map((item,i)=>`<tr><td>${item}</td><td>${s['s5_'+i]||'—'}</td></tr>`).join('');
-return `<table><thead><tr><th>Item</th><th>Available</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
-
+return `<table><thead><tr><th>Equipment</th><th>Make</th><th>Model</th><th>Calibration Date</th><th>Functional</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
 <div class="page-break"></div>
-
-<!-- 4. TEST RESULTS -->
 <h1>4. Test Results</h1>
-
-<h2>4.1 Insulation Resistance Results</h2>
-${(()=>{const s=ad.s9||{};
-let rows='';
-for(let i=1;i<=4;i++){
-  const val=s['s9_o4d'+i+'_val'];
-  const pf=s['s9_o4d'+i+'_pf'];
-  if(val||pf)rows+=`<tr><td>OALC4 Drum ${i} — Screen to copper</td><td>${val||'—'}</td><td>${pf?`<span class="badge badge-${pf==='Pass'?'pass':'fail'}">${pf}</span>`:'—'}</td></tr>`;
-}
-for(let i=1;i<=4;i++){
-  const tests=[['Cond A to B','ab'],['Cond A to Arm','aa'],['Cond B to Arm','ba']];
-  tests.forEach(([label,key])=>{
-    const val=s['s9_nxd'+i+'_'+key];
-    const pf=s['s9_nxd'+i+'_'+key+'pf'];
-    if(val||pf)rows+=`<tr><td>Nexans Drum ${i} — ${label}</td><td>${val||'—'}</td><td>${pf?`<span class="badge badge-${pf==='Pass'?'pass':'fail'}">${pf}</span>`:'—'}</td></tr>`;
-  });
-}
+<h2>4.1 Insulation Resistance</h2>
+${(()=>{const s=ad.s9||{};let rows='';
+for(let i=1;i<=4;i++){const val=s['s9_o4d'+i+'_val'];const pf=s['s9_o4d'+i+'_pf'];if(val||pf)rows+=`<tr><td>OALC4 Drum ${i}</td><td>${val||'—'}</td><td>${pf?`<span class="badge badge-${pf==='Pass'?'pass':'fail'}">${pf}</span>`:'—'}</td></tr>`;}
 if(!rows)return '<p>No IR test data recorded.</p>';
 return `<table><thead><tr><th>Test</th><th>Value</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
-
 <h2>4.2 Optical / Fibre Test Results</h2>
-${(()=>{const s=ad.s8||{};
-let rows='';let passes=0;let fails=0;
-for(let i=1;i<=32;i++){
-  const col=s['s8_f'+i+'_col'];
-  const dist=s['s8_f'+i+'_dist'];
-  const pf=s['s8_f'+i+'_pf'];
-  const cmt=s['s8_f'+i+'_cmt'];
-  if(dist||pf){
-    if(pf==='Pass')passes++;
-    if(pf==='Fail')fails++;
-    rows+=`<tr><td>${i}</td><td>${col||'—'}</td><td>${dist||'—'}</td><td>${pf?`<span class="badge badge-${pf==='Pass'?'pass':'fail'}">${pf}</span>`:'—'}</td><td>${cmt||''}</td></tr>`;
-  }
-}
+${(()=>{const s=ad.s8||{};let rows='';let passes=0;let fails=0;
+for(let i=1;i<=32;i++){const col=s['s8_f'+i+'_col'];const dist=s['s8_f'+i+'_dist'];const pf=s['s8_f'+i+'_pf'];const cmt=s['s8_f'+i+'_cmt'];if(dist||pf){if(pf==='Pass')passes++;if(pf==='Fail')fails++;rows+=`<tr><td>${i}</td><td>${col||'—'}</td><td>${dist||'—'}</td><td>${pf?`<span class="badge badge-${pf==='Pass'?'pass':'fail'}">${pf}</span>`:'—'}</td><td>${cmt||''}</td></tr>`;}}
 if(!rows)return '<p>No fibre test data recorded.</p>';
-return `<p><strong>Summary:</strong> ${passes} passed, ${fails} failed out of ${passes+fails} tested.</p>
-<table><thead><tr><th>#</th><th>Colour</th><th>Distance (m)</th><th>Result</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
-
-<!-- 5. ROUTE INSPECTION -->
+return `<p><strong>Summary:</strong> ${passes} passed, ${fails} failed.</p><table><thead><tr><th>#</th><th>Colour</th><th>Distance (m)</th><th>Result</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
 <h1>5. Route Inspection</h1>
-${(()=>{const s=ad.s6||{};return `
-<table class="kv-table">
-  <tr><td>Route patrolled</td><td>${s.s6_patrol||'—'}</td></tr>
-  <tr><td>Route protected by security</td><td>${s.s6_sec||'—'}</td></tr>
-  <tr><td>Manholes regularly inspected</td><td>${s.s6_insp||'—'}</td></tr>
-  <tr><td>Registered with local authority</td><td>${s.s6_reg||'—'}</td></tr>
-  <tr><td>Fronthaul shared with others</td><td>${s.s6_shared||'—'}</td></tr>
-  <tr><td>3rd party construction notifications</td><td>${s.s6_3p||'—'}</td></tr>
-</table>
-${s.s6_comments?`<p><strong>Comments:</strong> ${s.s6_comments}</p>`:''}
-
-${(()=>{const mhs=s.manholes||[];if(!mhs.length)return '';
-return mhs.map((mh,idx)=>{const dd=mh.data||{};const id=mh.id;
-return `<h3>Manhole ${idx+1}${dd['mh_'+id+'_num']?' — MH '+dd['mh_'+id+'_num']:''}</h3>
-<table class="kv-table">
+${(()=>{const s=ad.s6||{};
+const mhs=s.manholes||[];
+const mhTable=mhs.length?`<h2>Manholes</h2>`+mhs.map((mh,idx)=>{const dd=mh.data||{};const id=mh.id;return `<h3>Manhole ${idx+1}${dd['mh_'+id+'_num']?' — MH '+dd['mh_'+id+'_num']:''}</h3><table class="kv-table">
   <tr><td>Coordinates</td><td>${dd['mh_'+id+'_lat']||'—'}, ${dd['mh_'+id+'_lng']||'—'}</td></tr>
-  <tr><td>Lid type</td><td>${dd['mh_'+id+'_ltype']||'—'}</td></tr>
   <tr><td>Lid locked</td><td>${dd['mh_'+id+'_locked']||'—'}</td></tr>
-  <tr><td>Ducts & sleeves sealed</td><td>${dd['mh_'+id+'_ducts']||'—'}</td></tr>
   <tr><td>Fills with water</td><td>${dd['mh_'+id+'_water']||'—'}</td></tr>
-  <tr><td>Inside dimensions</td><td>${dd['mh_'+id+'_dims']||'—'}</td></tr>
   <tr><td>Cables labelled</td><td>${dd['mh_'+id+'_lab']||'—'}</td></tr>
-  <tr><td>24hr access</td><td>${dd['mh_'+id+'_24h']||'—'}</td></tr>
-</table>
-${dd['mh_'+id+'_comments']?`<p><strong>Comments:</strong> ${dd['mh_'+id+'_comments']}</p>`:''}`;}).join('');})()}`;})()}
-
-<!-- 6. RISK ASSESSMENT -->
-<h1>6. Risk Assessment</h1>
-${(()=>{const s=ad.s10||{};
-const cats=[
-  {t:'Construction Risks',start:0,count:6},
-  {t:'Security of Manhole Infrastructure',start:6,count:7},
-  {t:'Land Route Sharing',start:13,count:6},
-  {t:'Manhole Maintenance Tools',start:19,count:6},
-  {t:'Health & Safety (PPE)',start:25,count:7},
-  {t:'Environmental Risks',start:32,count:5}
-];
-const questions=[
-  'Ongoing/planned civil works near cable route?','Permits obtained for 3rd-party excavations?','Cable route registered as protected utility?','Warning signs/markers visible along route?','Landing party engaged local authorities?','Evidence of recent ground disturbance?',
-  'Manhole covers intact and properly seated?','Locking mechanisms installed and functional?','Evidence of unauthorised access or tampering?','Surrounding surfaces stable?','Manhole frames free of corrosion?','Manhole ID labels visible?','Routine inspection schedule in place?',
-  'Other network cables in same manholes?','Foreign cables organised and labelled?','Clear segregation between cables?','Unused cables removed or tied back?','Damage to submarine cable from crowding?','Responsibilities for shared manholes defined?',
-  'Opening tools available and working?','Ladders and barriers available?','Pumps for flooded manholes available?','Temporary lighting available?','Traffic management deployed?','Tools inspected and maintained?',
-  'All personnel wearing approved PPE?','H&S briefing before site entry?','Confined space procedures followed?','Gas detection performed?','Safety barriers and warning signs in use?','First aid kits available?','Safe access and egress to manholes?',
-  'Water ingress posing risk?','Oil/chemicals stored correctly?','Evidence of erosion?','Drainage systems functional?','Vegetation managed?'
-];
-return cats.map(cat=>{
-  const rows=[];
-  for(let i=cat.start;i<cat.start+cat.count;i++){
-    const ans=s['s10_'+i+'_ans'];
-    const cmt=s['s10_'+i+'_c'];
-    if(ans)rows.push(`<tr><td>${questions[i]}</td><td><span class="badge badge-${ans==='Yes'?'pass':ans==='No'?'fail':'na'}">${ans}</span></td><td>${cmt||''}</td></tr>`);
-  }
-  if(!rows.length)return '';
-  return `<h2>${cat.t}</h2><table><thead><tr><th>Item</th><th>Status</th><th>Comment</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
-}).join('');})()}
-
-<!-- 7. DIARY OF EVENTS -->
-<h1>7. Diary of Events</h1>
+</table>${dd['mh_'+id+'_comments']?`<p><strong>Comments:</strong> ${dd['mh_'+id+'_comments']}</p>`:''}`}).join(''):'';
+return `<table class="kv-table">
+  <tr><td>Route patrolled</td><td>${s.s6_patrol||'—'}</td></tr>
+  <tr><td>Route security</td><td>${s.s6_sec||'—'}</td></tr>
+  <tr><td>Manholes inspected regularly</td><td>${s.s6_insp||'—'}</td></tr>
+  <tr><td>3rd party notifications</td><td>${s.s6_3p||'—'}</td></tr>
+</table>${s.s6_comments?`<p><strong>Comments:</strong> ${s.s6_comments}</p>`:''}${mhTable}`;})()}
+<h1>6. Diary of Events</h1>
 ${(()=>{const s=ad.s11||{};const acts=s.activities||[];
 if(!acts.length||!acts[0].date)return '<p>No diary entries recorded.</p>';
 const rows=acts.filter(a=>a.date||a.desc).map(a=>`<tr><td>${a.date||'—'}</td><td>${a.desc||'—'}</td><td>${a.loc||'—'}</td><td>${a.part||'—'}</td><td>${a.rem||'—'}</td></tr>`).join('');
 return `<table><thead><tr><th>Date</th><th>Activity</th><th>Location</th><th>Participants</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
-
-<!-- 8. TOOLS INVENTORY -->
-<h1>8. Tools Inventory</h1>
-${(()=>{const s=ad.s7||{};
-const tools=['Water pump pliers','Cutting pliers','Mini bolt cutters','Snipe nose pliers','Combination pliers','Electrical shears','Fixers snipers','Grip pliers','Screwdrivers','File flat','Measuring tape','Steel ruler','Stanley knife','Stanley blades','Hacksaw','Flat spanners','Allen keys','Adjustable spanner','Hammer','Mallet','Spirit level','Tool bag','Tool chest','Rachet ¼"','Universal bit holder','Rachet set','Crimping pliers','Nylon strap wrenches','C spanner','Digital caliper','Cable tie pliers','Cordless drill','SDS drill','Angle grinder','Heat gun','Portable lights','Battery charger','Drill set SDS','Dremel tool','Dremel mandrel','Dremel disk','Dremel shaft','Mobile workbench','Sheath stripper','Thermohydrometer','Bending claw','Needle file','Torque wrench 10-15Nm','Torque wrench 40-400Nm','Torque screwdriver 0.5-2.5Nm','Torque screwdriver 2-10Nm','Ratchet handle','10mm spanner','11mm spanner','13mm spanner','17mm spanner','19mm spanner','Socket adaptor','Toolbox','Mandrel','Wedge URC2','Kynar tool','OALC2 tool','Tin opener','Dryer tip','Spiral cutter','ALROC blades','Specific cutter','Tube cutter blades','Cable stripper','MK01A blade','Ripley WS50','WS50 blade','Dryer refill','Dryer','Hand pump','OCC-SC300 tool'];
-const present=tools.filter((_,i)=>s['s7_'+i]==='Yes').length;
-const absent=tools.filter((_,i)=>s['s7_'+i]==='No').length;
-if(!present&&!absent)return '<p>No tools data recorded.</p>';
-const missingTools=tools.filter((_,i)=>s['s7_'+i]==='No');
-return `<p><strong>Present:</strong> ${present} of ${tools.length} tools | <strong>Missing:</strong> ${absent}</p>
-${missingTools.length?`<p><strong>Missing items:</strong> ${missingTools.join(', ')}</p>`:''}`;})()}
-
-<!-- ANNEX I PHOTOS -->
-${(()=>{
-  const s=ad.s12||{};
-  const cats=[
-    {label:'A. Cable Drums',slots:[{id:'oalc4',label:'OALC4 Optical Drum'},{id:'nexans',label:'Nexans Electrical Cable'}]},
-    {label:'B. Jointing Kits',slots:[{id:'oalc4jt',label:'Jointing Kits OALC4'},{id:'earthkt',label:'Earth Kits incl. Specific Earth Joint'}]},
-    {label:'C. Vault & BMH (inside)',slots:[{id:'coiled',label:'Cable coiled inside manhole'},{id:'labels',label:'Labels on OALC4 & Nexans cables'}]},
-    {label:'D. BMH from outside',slots:[{id:'lidclosed',label:'BMH lid closed'}]},
-    {label:'E. Cable Testing',slots:[{id:'steelsleeve',label:'Cable testing steel sleeve'}]},
-  ];
-  const hasPhotos=cats.some(c=>c.slots.some(sl=>s['ph_'+sl.id+'_img']));
-  if(!hasPhotos)return '';
-  let out='<div class="page-break"></div><h1>Annex I — Photographs</h1>';
-  cats.forEach(cat=>{
-    const photos=cat.slots.filter(sl=>s['ph_'+sl.id+'_img']);
-    if(!photos.length)return;
-    out+='<h2>'+cat.label+'</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">';
-    photos.forEach(sl=>{
-      const img=s['ph_'+sl.id+'_img'];
-      const cap=s['ph_'+sl.id+'_cap']||sl.label;
-      out+='<div style="break-inside:avoid"><img src="'+img+'" style="width:100%;height:180px;object-fit:cover;border:1px solid #ddd;border-radius:4px;display:block"><p style="font-size:9pt;color:#555;margin-top:4px;text-align:center;font-style:italic">'+cap+'</p></div>';
-    });
-    out+='</div>';
+${(()=>{const s=ad.s12||{};
+const cats=[
+  {label:'A. Cable Drums',slots:[{id:'oalc4'},{id:'nexans'}]},
+  {label:'B. Jointing Kits',slots:[{id:'oalc4jt'},{id:'earthkt'}]},
+  {label:'C. Vault & BMH',slots:[{id:'coiled'},{id:'labels'}]},
+  {label:'D. BMH from outside',slots:[{id:'lidclosed'}]},
+  {label:'E. Cable Testing',slots:[{id:'steelsleeve'}]},
+];
+const hasPhotos=cats.some(c=>c.slots.some(sl=>s['ph_'+sl.id+'_img']));
+if(!hasPhotos)return '';
+let out='<div class="page-break"></div><h1>Annex I — Photographs</h1>';
+cats.forEach(cat=>{
+  const photos=cat.slots.filter(sl=>s['ph_'+sl.id+'_img']);
+  if(!photos.length)return;
+  out+='<h2>'+cat.label+'</h2><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">';
+  photos.forEach(sl=>{
+    const img=s['ph_'+sl.id+'_img'];
+    const cap=s['ph_'+sl.id+'_cap']||sl.id;
+    out+='<div><img src="'+img+'" style="width:100%;height:180px;object-fit:cover;border:1px solid #ddd;border-radius:4px"><p style="font-size:9pt;color:#555;margin-top:4px;text-align:center;font-style:italic">'+cap+'</p></div>';
   });
-  return out;
-})()}
-
-<!-- ANNEX II OTDR -->
-${(()=>{
-  const s=ad.s13||{};
-  const keys=Object.keys(s).filter(k=>k.endsWith('_file'));
-  if(!keys.length)return '';
-  let out='<div class="page-break"></div><h1>Annex II — OTDR Traces</h1>';
-  keys.forEach(k=>{
-    const num=k.replace('otdr_f','').replace('_file','');
-    const label=s['otdr_f'+num+'_label']||('Fibre '+num);
-    const name=s['otdr_f'+num+'_name']||'';
-    const fd=s[k];
-    out+='<div style="margin-bottom:20px;break-inside:avoid"><h3>'+label+(name?' <span style="font-weight:400;font-size:9pt;color:#777">('+name+')</span>':'')+'</h3><iframe src="'+fd+'" style="width:100%;height:600px;border:1px solid #ddd;border-radius:4px" title="'+label+'"></iframe></div>';
-  });
-  return out;
-})()}
-
-<div class="footer">
-  Report generated by Trigva Audit Platform · ${new Date().toLocaleDateString('en-GB')} · ${sys.name} · ${st.name}
-</div>
-
-</div>
-</body>
-</html>`;
+  out+='</div>';
+});
+return out;})()}
+${(()=>{const s=ad.s13||{};const keys=Object.keys(s).filter(k=>k.endsWith('_file'));if(!keys.length)return '';
+let out='<div class="page-break"></div><h1>Annex II — OTDR Traces</h1>';
+keys.forEach(k=>{const num=k.replace('otdr_f','').replace('_file','');const label=s['otdr_f'+num+'_label']||('Fibre '+num);const name=s['otdr_f'+num+'_name']||'';const fd=s[k];
+out+='<div style="margin-bottom:20px"><h3>'+label+(name?' ('+name+')':'')+'</h3><iframe src="'+fd+'" style="width:100%;height:600px;border:1px solid #ddd" title="'+label+'"></iframe></div>';});
+return out;})()}
+<div class="footer">Report generated by Trigva Audit Platform · ${new Date().toLocaleDateString('en-GB')} · ${sys.name} · ${st.name}</div>
+</div></body></html>`;
 
   const win=window.open('','_blank');
-  if(win){
-    win.document.write(html);
-    win.document.close();
-  } else {
-    alert('Please allow popups for this site to view the report.');
-  }
-}
-
-function markdownToHTML(md){
-  return md
-    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
-    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
-    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/^- (.+)$/gm,'<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g,'<ul>$&</ul>')
-    .replace(/\n\n/g,'</p><p>')
-    .replace(/^([^<].+)$/gm,'<p>$1</p>')
-    .replace(/<p><\/p>/g,'')
-    .replace(/\|(.+)\|/g,(m,cells)=>{
-      const cols=cells.split('|').map(c=>c.trim());
-      return '<tr>'+cols.map(c=>c.match(/^[-:]+$/)?' ':`<td>${c}</td>`).join('')+'</tr>';
-    })
-    .replace(/(<tr>.*<\/tr>\n?)+/g,'<table>$&</table>');
+  if(win){win.document.write(html);win.document.close();}
+  else{alert('Please allow popups for this site to view the report.');}
 }
 
 // ── SUPERVISOR ──
@@ -1597,7 +1436,7 @@ async function renderSupOverview(){
               <div><div class="station-code">${stCode}</div><div class="station-name">${st.name}</div><div class="station-country">${st.flag} ${st.country}</div></div>
               <div class="status-pill ${status==='submitted'?'complete':status==='draft'?'partial':'draft'}">${status==='submitted'?'✓ Submitted':status==='draft'?'In Progress':'No Audit'}</div>
             </div>
-            ${audit?`<div style="font-size:11px;color:${hasASN?'var(--success)':'var(--warn)'};margin-bottom:6px">${hasASN?'📄 As-Built loaded':'⚠ No As-Built'}</div>`:'' }
+            ${audit?`<div style="font-size:11px;color:${hasASN?'var(--success)':'var(--warn)'};margin-bottom:6px">${hasASN?'📄 As-Built loaded':'⚠ No As-Built'}</div>`:''}
             <div class="station-progress"><div class="station-progress-bar" style="width:${prog}%"></div></div>
             <div class="prog-label">${prog}% complete</div>
           </div>`;
@@ -1637,7 +1476,6 @@ function calcProgress(dj){
   return total===0?0:Math.round((done/total)*100);
 }
 
-// ── TOAST ──
 function toast(msg,type=''){
   const t=document.getElementById('toast');
   t.textContent=msg;t.className='toast show'+(type?' '+type:'');
