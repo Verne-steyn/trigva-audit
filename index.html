@@ -334,7 +334,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 <script>
 const SUPABASE_URL = 'https://jpyukmcpkltuzobbuitn.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpweXVrbWNwa2x0dXpvYmJ1aXRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNzkxOTIsImV4cCI6MjA4OTY1NTE5Mn0.eMW-vXMVmcOkPwUZy7OKKvg_o2SOVvdR7g7Rd4KqEhE';
-const CLAUDE_API_KEY = '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';
+const CLAUDE_API_KEY = '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';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ── CABLE SYSTEMS & STATIONS ──
@@ -1201,6 +1201,7 @@ function renderS13(data) {
   html += `</div></div>`;
   const uploaded = Object.keys(data).filter(k=>k.startsWith('otdr_')&&k.endsWith('_file')).length;
   html += `<div style="margin-top:12px;font-size:12px;color:var(--text2);font-family:var(--mono)">${uploaded} of ${count} traces uploaded</div>`;
+  if(uploaded>0){html+=`<button onclick="reParseAllOTDR()" class="btn btn-blue btn-sm" style="margin-top:12px;width:auto">&#x27f3; Re-extract span data from all traces</button>`;}
   return html;
 }
 
@@ -1228,9 +1229,9 @@ async function parseOTDRWithClaude(base64data){
     const pureBase64=base64data.split(',')[1]; // strip data:application/pdf;base64, prefix
     const response=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','x-api-key':CLAUDE_API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'claude-haiku-4-5-20251001',
         max_tokens:200,
         messages:[{
           role:'user',
@@ -1308,6 +1309,31 @@ function removeOTDR(fNum, fileKey, nameKey) {
     delete auditData.s8[`s8_f${fNum}_loss`];
   }
   scheduleAutoSave();
+  renderSection('s13');
+}
+
+async function reParseAllOTDR(){
+  const s13=auditData.s13||{};
+  const keys=Object.keys(s13).filter(k=>k.endsWith('_file')&&k.startsWith('otdr_'));
+  if(!keys.length){toast('No traces uploaded yet','err');return;}
+  toast('Extracting span data from '+keys.length+' trace(s)…');
+  for(const fileKey of keys){
+    const num=fileKey.replace('otdr_f','').replace('_file','');
+    const nameKey='otdr_f'+num+'_name';
+    const base64=s13[fileKey];
+    const filename=s13[nameKey]||'';
+    const colour=parseColourFromFilename(filename);
+    const{spanLen,spanLoss}=await parseOTDRWithClaude(base64);
+    auditData.s8=auditData.s8||{};
+    auditData.s8['s8_f'+num+'_col']=colour;
+    if(spanLen)auditData.s8['s8_f'+num+'_dist']=spanLen;
+    if(spanLoss)auditData.s8['s8_f'+num+'_loss']=spanLoss;
+    auditData.s13['otdr_f'+num+'_colour']=colour;
+    auditData.s13['otdr_f'+num+'_spanlen']=spanLen;
+    auditData.s13['otdr_f'+num+'_spanloss']=spanLoss;
+  }
+  await saveAudit(false);
+  toast('Done — '+keys.length+' trace(s) parsed ✓','ok');
   renderSection('s13');
 }
 
