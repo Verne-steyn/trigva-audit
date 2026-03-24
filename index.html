@@ -1224,35 +1224,43 @@ function parseColourFromFilename(filename){
 }
 
 async function parseOTDRWithClaude(base64data){
-  // Use Claude API to read the OTDR PDF and extract Span length and Span loss.
-  // The PDF streams are compressed so raw text scanning doesn't work.
   try{
-    const pureBase64=base64data.split(',')[1]; // strip data:application/pdf;base64, prefix
+    // Strip the data URL prefix if present
+    const pureBase64=base64data.includes(',') ? base64data.split(',')[1] : base64data;
+    console.log('Calling Claude API, base64 length:',pureBase64.length);
     const response=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':CLAUDE_API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':CLAUDE_API_KEY,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
       body:JSON.stringify({
         model:'claude-haiku-4-5-20251001',
-        max_tokens:200,
+        max_tokens:150,
         messages:[{
           role:'user',
           content:[
             {type:'document',source:{type:'base64',media_type:'application/pdf',data:pureBase64}},
-            {type:'text',text:'From this OTDR report PDF, extract ONLY these two values from the Results section:\n1. Span length (in km)\n2. Span loss (in dB)\n\nRespond with ONLY a JSON object like this, no other text:\n{"spanLen":"0.8188 km","spanLoss":"2.813 dB"}\n\nUse a dot as decimal separator. If a value is not found, use an empty string.'}
+            {type:'text',text:'From this OTDR report, find the Results section and return ONLY this JSON, nothing else: {"spanLen":"VALUE km","spanLoss":"VALUE dB"} using dot as decimal. Example: {"spanLen":"0.8188 km","spanLoss":"2.813 dB"}'}
           ]
         }]
       })
     });
+    console.log('API response status:',response.status);
     const data=await response.json();
-    console.log('Claude API status:',response.status,'response:',JSON.stringify(data).substring(0,300));
-    const text=(data.content||[]).map(b=>b.text||'').join('').trim();
-    console.log('Claude API text:',text);
-    const clean=text.replace(/```[a-z]*\n?/g,'').trim();
-    const parsed=JSON.parse(clean);
-    console.log('Parsed OTDR values:',parsed);
+    console.log('API response body:',JSON.stringify(data).substring(0,400));
+    if(data.error){console.error('API error:',data.error);return{spanLen:'',spanLoss:''};}
+    const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    console.log('Extracted text:',text);
+    const jsonMatch=text.match(/\{[^}]+\}/);
+    if(!jsonMatch){console.warn('No JSON found in response:',text);return{spanLen:'',spanLoss:''};}
+    const parsed=JSON.parse(jsonMatch[0]);
+    console.log('Parsed:',parsed);
     return{spanLen:parsed.spanLen||'',spanLoss:parsed.spanLoss||''};
   }catch(e){
-    console.warn('Claude OTDR parse error:',e);
+    console.error('parseOTDRWithClaude error:',e.message,e);
     return{spanLen:'',spanLoss:''};
   }
 }
