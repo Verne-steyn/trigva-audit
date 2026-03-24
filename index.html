@@ -766,6 +766,7 @@ function collectCurrentSection(){
   const sec=currentSection;
   auditData[sec]=auditData[sec]||{};
   document.getElementById('content').querySelectorAll('[data-key]').forEach(el=>{
+    if(el.readOnly&&!el.value)return;
     auditData[sec][el.dataset.key]=el.type==='checkbox'?el.checked:el.value;
   });
   if(sec==='s6'){auditData.s6=auditData.s6||{};auditData.s6.manholes=collectManholes();}
@@ -1333,7 +1334,8 @@ async function reParseAllOTDR(){
     auditData.s13['otdr_f'+num+'_spanloss']=spanLoss;
   }
   await saveAudit(false);
-  toast('Done — '+keys.length+' trace(s) parsed ✓','ok');
+  toast('Done — '+keys.length+' trace(s) parsed ✓ — check Section 08 Fibres','ok');
+  // Re-render s13 to show badges, then also refresh s8 data display
   renderSection('s13');
 }
 
