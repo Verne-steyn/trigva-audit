@@ -1243,7 +1243,7 @@ async function parseOTDRWithClaude(base64data){
           role:'user',
           content:[
             {type:'document',source:{type:'base64',media_type:'application/pdf',data:pureBase64}},
-            {type:'text',text:'From this OTDR report, find the Results section and return ONLY this JSON, nothing else: {"spanLen":"VALUE km","spanLoss":"VALUE dB"} using dot as decimal. Example: {"spanLen":"0.8188 km","spanLoss":"2.813 dB"}'}
+            {type:'text',text:'This is an EXFO OTDR report. In the Results section there are lines like "Span length: 0,8188 km" and "Span loss: 2,813 dB". Extract those two values and return ONLY this JSON with no other text: {"spanLen":"0.8188 km","spanLoss":"2.813 dB"}. Convert commas to dots in the numbers. If not found use empty string.'}
           ]
         }]
       })
