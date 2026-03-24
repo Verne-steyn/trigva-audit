@@ -1016,22 +1016,25 @@ function renderS7(data){
 }
 
 function renderS8(data){
-  const cols=['Blue','Orange','Green','Brown','Grey','White','Red','Black','Yellow','Violet','Rose','Aqua'];
+  const roStyle='background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 7px;color:var(--text2);font-family:var(--sans);font-size:12px;width:100%;cursor:default;';
   let rows='';
   for(let i=1;i<=32;i++){
-    rows+=`<tr>
+    const hasData=data[`s8_f${i}_col`]||data[`s8_f${i}_dist`]||data[`s8_f${i}_loss`];
+    rows+=`<tr${!hasData?' style="opacity:0.45"':''}>
       <td class="fibre-num">${i}</td>
-      <td><input data-key="s8_f${i}_col" value="${esc(data[`s8_f${i}_col`]||cols[(i-1)%12])}"></td>
-      <td><input data-key="s8_f${i}_dist" value="${esc(data[`s8_f${i}_dist`]||'')}" placeholder="m"></td>
-      <td><select data-key="s8_f${i}_pf" style="background:var(--bg);border:1px solid transparent;border-radius:4px;padding:4px 7px;font-size:12px;color:var(--text);font-family:var(--sans);outline:none;width:100%">
-        <option value="">—</option><option${data[`s8_f${i}_pf`]==='Pass'?' selected':''}>Pass</option><option${data[`s8_f${i}_pf`]==='Fail'?' selected':''}>Fail</option></select></td>
-      <td><input data-key="s8_f${i}_cmt" value="${esc(data[`s8_f${i}_cmt`]||'')}" placeholder="Comment"></td>
+      <td><input data-key="s8_f${i}_col" value="${esc(data[`s8_f${i}_col`]||'')}" readonly style="${roStyle}" placeholder="—" title="Auto-populated from OTDR trace filename"></td>
+      <td><input data-key="s8_f${i}_dist" value="${esc(data[`s8_f${i}_dist`]||'')}" readonly style="${roStyle}" placeholder="—" title="Auto-populated from OTDR trace"></td>
+      <td><input data-key="s8_f${i}_loss" value="${esc(data[`s8_f${i}_loss`]||'')}" readonly style="${roStyle}" placeholder="—" title="Auto-populated from OTDR trace"></td>
+      <td><input data-key="s8_f${i}_cmt" value="${esc(data[`s8_f${i}_cmt`]||'')}" placeholder="Comment" style="background:var(--bg);border:1px solid transparent;border-radius:4px;padding:4px 7px;color:var(--text);font-family:var(--sans);font-size:12px;width:100%"></td>
       </tr>`;
   }
+  const traceCount=Object.keys(data).filter(k=>k.endsWith('_col')&&k.startsWith('s8_')).length;
+  const banner=traceCount===0?`<div style="background:rgba(0,112,224,.07);border:1px solid rgba(0,112,224,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--accent2)">ℹ Colour, Distance and Span Loss are populated automatically when OTDR traces are uploaded in <strong>Annex II</strong>. Only the Comment field is editable here.</div>`:'';
   return `<div class="audit-group"><div class="audit-group-header">Fibre Test Results — 32 Fibres</div>
     <div style="padding:12px 16px;overflow-x:auto">
+      ${banner}
       <table class="fibre-table">
-        <thead><tr><th style="width:36px">#</th><th>Colour</th><th>Distance (m)</th><th>Pass / Fail</th><th>Comment</th></tr></thead>
+        <thead><tr><th style="width:36px">#</th><th>Colour</th><th>Span Length (km)</th><th>Span Loss (dB)</th><th>Comment</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div></div>`;
@@ -1162,25 +1165,37 @@ function renderS13(data) {
   const mandatoryMsg = !fibreCount ? `<div style="background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--warn)">⚠ Please enter the Fibre Count in <strong>Section 2 — Spare Cable</strong> first. The number of OTDR traces required is based on that value.</div>` : '';
   const count = fibreCount || 4;
   let html = mandatoryMsg;
+  html += `<div style="background:rgba(0,168,150,.06);border:1px solid rgba(0,168,150,.2);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--accent)">ℹ Upload each OTDR trace PDF. Span Length, Span Loss and Colour will be extracted automatically and populate Section 08 — Fibres.</div>`;
   html += `<div class="audit-group"><div class="audit-group-header">OTDR Traces — ${count} Fibre Pair${count!==1?'s':''} Expected</div><div style="padding:16px">`;
   for (let i = 1; i <= count; i++) {
     const fileKey = 'otdr_f'+i+'_file';
     const nameKey = 'otdr_f'+i+'_name';
-    const labelKey = 'otdr_f'+i+'_label';
     const existingName = data[nameKey];
-    const existingLabel = data[labelKey] || 'Fibre '+i;
-    html += `<div style="display:grid;grid-template-columns:1fr 2fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="font-family:var(--mono);font-size:12px;color:var(--text2)">Fibre ${i}</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        ${existingName
-          ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--success);flex:1">✓ ${existingName}</div>`
-          : `<label style="background:var(--surface2);border:1px dashed var(--border);border-radius:6px;padding:5px 12px;font-size:12px;color:var(--text2);cursor:pointer;flex:1;text-align:center">
-              + Upload PDF
-              <input type="file" accept=".pdf" style="display:none" onchange="handleOTDR(this,${i},'${fileKey}','${nameKey}')">
-            </label>`}
-        <input class="row-input" data-key="${labelKey}" value="${esc(existingLabel)}" placeholder="Label e.g. Blue fibre" style="min-width:140px;flex:1;font-size:12px">
+    const parsedColour = data[`otdr_f${i}_colour`]||'';
+    const parsedLen    = data[`otdr_f${i}_spanlen`]||'';
+    const parsedLoss   = data[`otdr_f${i}_spanloss`]||'';
+    const parsedBadge  = existingName
+      ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+          ${parsedColour?`<span style="font-size:11px;background:rgba(0,168,150,.1);border:1px solid rgba(0,168,150,.25);border-radius:4px;padding:2px 8px;color:var(--accent);font-family:var(--mono)">🎨 ${parsedColour}</span>`:''}
+          ${parsedLen?`<span style="font-size:11px;background:rgba(0,112,224,.1);border:1px solid rgba(0,112,224,.25);border-radius:4px;padding:2px 8px;color:var(--accent2);font-family:var(--mono)">📏 ${parsedLen}</span>`:''}
+          ${parsedLoss?`<span style="font-size:11px;background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.25);border-radius:4px;padding:2px 8px;color:var(--success);font-family:var(--mono)">📉 ${parsedLoss}</span>`:''}
+          ${!parsedLen&&!parsedLoss?`<span style="font-size:11px;color:var(--text3);font-style:italic">No span data found in PDF — values may need manual check in Fibres section</span>`:''}
+        </div>`
+      : '';
+    html += `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:12px;align-items:center">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--text2)">Fibre ${i}</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${existingName
+            ? `<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--success);flex:1;font-family:var(--mono)">✓ ${existingName}</div>`
+            : `<label style="background:var(--surface2);border:1px dashed var(--border);border-radius:6px;padding:5px 12px;font-size:12px;color:var(--text2);cursor:pointer;flex:1;text-align:center">
+                + Upload PDF
+                <input type="file" accept=".pdf" style="display:none" onchange="handleOTDR(this,${i},'${fileKey}','${nameKey}')">
+              </label>`}
+        </div>
+        ${existingName ? `<button onclick="removeOTDR(${i},'${fileKey}','${nameKey}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px">✕</button>` : '<div></div>'}
       </div>
-      ${existingName ? `<button onclick="removeOTDR(${i},'${fileKey}','${nameKey}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px">✕</button>` : '<div></div>'}
+      ${parsedBadge}
     </div>`;
   }
   html += `</div></div>`;
@@ -1189,22 +1204,108 @@ function renderS13(data) {
   return html;
 }
 
-function handleOTDR(input, fNum, fileKey, nameKey) {
+function parseColourFromFilename(filename){
+  // Known colours to look for in filename
+  const colours=['Aqua','Blue','Orange','Green','Brown','Grey','Gray','White','Red','Black','Yellow','Violet','Rose','Pink','Slate','Turquoise','Lime'];
+  const base=filename.replace(/\.[^.]+$/,''); // strip extension
+  let found='';
+  for(const c of colours){
+    if(new RegExp('\\b'+c+'\\b','i').test(base)){found=c;break;}
+  }
+  // Look for a trailing number like 250, 350 etc (fibre diameter/type)
+  const numMatch=base.match(/\b(\d{2,4})\b/g);
+  // filter to likely fibre size numbers
+  const fiberNum=numMatch?numMatch.find(n=>['125','250','350','400','500','900'].includes(n)||parseInt(n)>=200&&parseInt(n)<=1000):null;
+  if(found&&fiberNum)return found+' '+fiberNum;
+  if(found)return found;
+  return base.split(/[\s_\-]/)[0]||'Fibre';
+}
+
+async function parseOTDRText(base64data){
+  // Extract text from the PDF base64 using a simple byte scan for readable ASCII strings
+  // We look for "Span length" and "Span loss" patterns in the raw PDF text stream
+  try{
+    const binary=atob(base64data.split(',')[1]);
+    // Extract printable ASCII runs (min 4 chars) from the PDF binary
+    let text='';
+    let run='';
+    for(let i=0;i<Math.min(binary.length,500000);i++){
+      const code=binary.charCodeAt(i);
+      if(code>=32&&code<=126){run+=binary[i];}
+      else{if(run.length>=4){text+=run+' ';}run='';}
+    }
+    // Try to find span length — look for patterns like "Span length 12.345 km" or "SpanLength: 12.345"
+    let spanLen='', spanLoss='';
+    // Span length patterns
+    const lenPatterns=[
+      /[Ss]pan\s*[Ll]ength[:\s=]+([0-9]+\.?[0-9]*)\s*(?:km)?/,
+      /[Ll]ength[:\s=]+([0-9]+\.?[0-9]*)\s*km/,
+      /\bDL[:\s=]+([0-9]+\.?[0-9]*)/,  // some OTDRs use DL for distance length
+      /[Tt]otal\s*[Ll]ength[:\s=]+([0-9]+\.?[0-9]*)/,
+    ];
+    for(const p of lenPatterns){const m=text.match(p);if(m){spanLen=parseFloat(m[1]).toFixed(3)+' km';break;}}
+    // Span loss patterns  
+    const lossPatterns=[
+      /[Ss]pan\s*[Ll]oss[:\s=]+([0-9]+\.?[0-9]*)\s*(?:dB)?/,
+      /[Tt]otal\s*[Ll]oss[:\s=]+([0-9]+\.?[0-9]*)\s*(?:dB)?/,
+      /[Ll]oss[:\s=]+([0-9]+\.?[0-9]*)\s*dB/,
+      /\bORL[:\s=]+([0-9]+\.?[0-9]*)/,
+    ];
+    for(const p of lossPatterns){const m=text.match(p);if(m){spanLoss=parseFloat(m[1]).toFixed(3)+' dB';break;}}
+    return{spanLen,spanLoss};
+  }catch(e){console.warn('OTDR parse error:',e);return{spanLen:'',spanLoss:''};}
+}
+
+async function handleOTDR(input, fNum, fileKey, nameKey) {
   const file = input.files[0];
   if (!file) return;
+  // Show parsing indicator
+  toast('Reading OTDR trace…');
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
+    const base64 = e.target.result;
     auditData.s13 = auditData.s13 || {};
-    auditData.s13[fileKey] = e.target.result;
+    auditData.s13[fileKey] = base64;
     auditData.s13[nameKey] = file.name;
+
+    // Parse colour from filename
+    const colour = parseColourFromFilename(file.name);
+
+    // Parse span length & loss from PDF text
+    const {spanLen, spanLoss} = await parseOTDRText(base64);
+
+    // Populate S8 fibre row for this fibre number
+    auditData.s8 = auditData.s8 || {};
+    auditData.s8[`s8_f${fNum}_col`] = colour;
+    if(spanLen) auditData.s8[`s8_f${fNum}_dist`] = spanLen;
+    if(spanLoss) auditData.s8[`s8_f${fNum}_loss`] = spanLoss;
+
+    // Store parse results alongside trace for display in s13
+    auditData.s13[`otdr_f${fNum}_colour`] = colour;
+    auditData.s13[`otdr_f${fNum}_spanlen`] = spanLen;
+    auditData.s13[`otdr_f${fNum}_spanloss`] = spanLoss;
+
     scheduleAutoSave();
+    toast(spanLen||spanLoss ? `Trace parsed: ${colour}${spanLen?' · '+spanLen:''}${spanLoss?' · '+spanLoss:''}` : `Uploaded — no span data found in PDF`, spanLen||spanLoss?'ok':'');
     renderSection('s13');
   };
   reader.readAsDataURL(file);
 }
 
 function removeOTDR(fNum, fileKey, nameKey) {
-  if (auditData.s13) { delete auditData.s13[fileKey]; delete auditData.s13[nameKey]; }
+  if (auditData.s13) {
+    delete auditData.s13[fileKey];
+    delete auditData.s13[nameKey];
+    delete auditData.s13[`otdr_f${fNum}_colour`];
+    delete auditData.s13[`otdr_f${fNum}_spanlen`];
+    delete auditData.s13[`otdr_f${fNum}_spanloss`];
+  }
+  // Clear the auto-populated s8 fields for this fibre
+  if (auditData.s8) {
+    delete auditData.s8[`s8_f${fNum}_col`];
+    delete auditData.s8[`s8_f${fNum}_dist`];
+    delete auditData.s8[`s8_f${fNum}_loss`];
+  }
   scheduleAutoSave();
   renderSection('s13');
 }
@@ -1356,10 +1457,10 @@ for(let i=1;i<=4;i++){const val=s['s9_o4d'+i+'_val'];const pf=s['s9_o4d'+i+'_pf'
 if(!rows)return '<p>No IR test data recorded.</p>';
 return `<table><thead><tr><th>Test</th><th>Value</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
 <h2>4.2 Optical / Fibre Test Results</h2>
-${(()=>{const s=ad.s8||{};let rows='';let passes=0;let fails=0;
-for(let i=1;i<=32;i++){const col=s['s8_f'+i+'_col'];const dist=s['s8_f'+i+'_dist'];const pf=s['s8_f'+i+'_pf'];const cmt=s['s8_f'+i+'_cmt'];if(dist||pf){if(pf==='Pass')passes++;if(pf==='Fail')fails++;rows+=`<tr><td>${i}</td><td>${col||'—'}</td><td>${dist||'—'}</td><td>${pf?`<span class="badge badge-${pf==='Pass'?'pass':'fail'}">${pf}</span>`:'—'}</td><td>${cmt||''}</td></tr>`;}}
-if(!rows)return '<p>No fibre test data recorded.</p>';
-return `<p><strong>Summary:</strong> ${passes} passed, ${fails} failed.</p><table><thead><tr><th>#</th><th>Colour</th><th>Distance (m)</th><th>Result</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
+${(()=>{const s=ad.s8||{};let rows='';let hasData=false;
+for(let i=1;i<=32;i++){const col=s['s8_f'+i+'_col'];const dist=s['s8_f'+i+'_dist'];const loss=s['s8_f'+i+'_loss'];const cmt=s['s8_f'+i+'_cmt'];if(col||dist||loss||cmt){hasData=true;rows+=`<tr><td>${i}</td><td>${col||'—'}</td><td>${dist||'—'}</td><td>${loss||'—'}</td><td>${cmt||''}</td></tr>`;}}
+if(!hasData)return '<p>No fibre test data recorded. Upload OTDR traces in Annex II to populate this section.</p>';
+return `<table><thead><tr><th>#</th><th>Colour</th><th>Span Length (km)</th><th>Span Loss (dB)</th><th>Comment</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
 <h1>5. Route Inspection</h1>
 ${(()=>{const s=ad.s6||{};
 const mhs=s.manholes||[];
