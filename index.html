@@ -1244,10 +1244,12 @@ async function parseOTDRWithClaude(base64data){
       })
     });
     const data=await response.json();
+    console.log('Claude API status:',response.status,'response:',JSON.stringify(data).substring(0,300));
     const text=(data.content||[]).map(b=>b.text||'').join('').trim();
-    // Strip any markdown fences
+    console.log('Claude API text:',text);
     const clean=text.replace(/```[a-z]*\n?/g,'').trim();
     const parsed=JSON.parse(clean);
+    console.log('Parsed OTDR values:',parsed);
     return{spanLen:parsed.spanLen||'',spanLoss:parsed.spanLoss||''};
   }catch(e){
     console.warn('Claude OTDR parse error:',e);
@@ -1317,14 +1319,17 @@ async function reParseAllOTDR(){
   const s13=auditData.s13||{};
   const keys=Object.keys(s13).filter(k=>k.endsWith('_file')&&k.startsWith('otdr_'));
   if(!keys.length){toast('No traces uploaded yet','err');return;}
+  console.log('reParseAllOTDR: found',keys.length,'traces:',keys);
   toast('Extracting span data from '+keys.length+' trace(s)…');
   for(const fileKey of keys){
     const num=fileKey.replace('otdr_f','').replace('_file','');
     const nameKey='otdr_f'+num+'_name';
     const base64=s13[fileKey];
     const filename=s13[nameKey]||'';
+    console.log('Parsing fibre',num,'filename:',filename,'base64 length:',base64?base64.length:0);
     const colour=parseColourFromFilename(filename);
     const{spanLen,spanLoss}=await parseOTDRWithClaude(base64);
+    console.log('Fibre',num,'result — colour:',colour,'spanLen:',spanLen,'spanLoss:',spanLoss);
     auditData.s8=auditData.s8||{};
     auditData.s8['s8_f'+num+'_col']=colour;
     if(spanLen)auditData.s8['s8_f'+num+'_dist']=spanLen;
@@ -1332,10 +1337,11 @@ async function reParseAllOTDR(){
     auditData.s13['otdr_f'+num+'_colour']=colour;
     auditData.s13['otdr_f'+num+'_spanlen']=spanLen;
     auditData.s13['otdr_f'+num+'_spanloss']=spanLoss;
+    console.log('auditData.s8 after fibre',num,':',JSON.stringify(auditData.s8));
   }
+  console.log('All done. Final auditData.s8:',JSON.stringify(auditData.s8));
   await saveAudit(false);
-  toast('Done — '+keys.length+' trace(s) parsed ✓ — check Section 08 Fibres','ok');
-  // Re-render s13 to show badges, then also refresh s8 data display
+  toast('Done — '+keys.length+' trace(s) parsed ✓ — now click 08 Fibres','ok');
   renderSection('s13');
 }
 
