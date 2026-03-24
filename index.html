@@ -334,7 +334,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 <script>
 const SUPABASE_URL = 'https://jpyukmcpkltuzobbuitn.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpweXVrbWNwa2x0dXpvYmJ1aXRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNzkxOTIsImV4cCI6MjA4OTY1NTE5Mn0.eMW-vXMVmcOkPwUZy7OKKvg_o2SOVvdR7g7Rd4KqEhE';
-const CLAUDE_API_KEY = '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';
+const CLAUDE_API_KEY = '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';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ── CABLE SYSTEMS & STATIONS ──
@@ -766,7 +766,7 @@ function collectCurrentSection(){
   const sec=currentSection;
   auditData[sec]=auditData[sec]||{};
   document.getElementById('content').querySelectorAll('[data-key]').forEach(el=>{
-    if(el.readOnly&&!el.value)return;
+    if(el.readOnly)return; // never collect readonly fields (s8 auto-populated from OTDR)
     auditData[sec][el.dataset.key]=el.type==='checkbox'?el.checked:el.value;
   });
   if(sec==='s6'){auditData.s6=auditData.s6||{};auditData.s6.manholes=collectManholes();}
@@ -1348,7 +1348,9 @@ async function reParseAllOTDR(){
     console.log('auditData.s8 after fibre',num,':',JSON.stringify(auditData.s8));
   }
   console.log('All done. Final auditData.s8:',JSON.stringify(auditData.s8));
-  await saveAudit(false);
+  // Save directly without collectCurrentSection which could interfere
+  await sb.from('trigva_audits').update({data_json:auditData,updated_at:new Date().toISOString()}).eq('id',currentAuditId);
+  console.log('Saved. auditData.s8 now:',JSON.stringify(auditData.s8));
   toast('Done — '+keys.length+' trace(s) parsed ✓ — now click 08 Fibres','ok');
   renderSection('s13');
 }
