@@ -1247,7 +1247,7 @@ async function parseOTDRWithPdfJs(base64data){
       const page=await pdf.getPage(p);
       const tc=await page.getTextContent();
       // Join items with space, preserving line-like structure
-      fullText+=tc.items.map(i=>i.str).join(' ')+' ';
+      fullText+=tc.items.map(i=>i.str).join('\n')+' ';
     }
     console.log('PDF text extracted:',fullText.substring(0,500));
 
@@ -1256,13 +1256,13 @@ async function parseOTDRWithPdfJs(base64data){
     const num='([0-9]+[,\.][0-9]+)';
     let spanLen='', spanLoss='';
 
-    const lenMatch=fullText.match(new RegExp('Span length[:\s]+'+num+'\s*km','i'));
+    // Values and labels are on separate lines in EXFO PDFs, use [\s\S]{0,30}? to match across newlines
+    const lenMatch=fullText.match(new RegExp('Span length:[\\s\\S]{0,30}?'+num+'\\s*km','i'));
     if(lenMatch){
       const v=parseFloat(lenMatch[1].replace(',','.'));
       if(v>0) spanLen=v.toFixed(4)+' km';
     }
-    // Span loss — match first occurrence, exclude "Span ORL"
-    const lossMatch=fullText.match(new RegExp('Span loss[:\s]+'+num+'\s*dB','i'));
+    const lossMatch=fullText.match(new RegExp('Span loss:[\\s\\S]{0,30}?'+num+'\\s*dB','i'));
     if(lossMatch){
       const v=parseFloat(lossMatch[1].replace(',','.'));
       if(v>0) spanLoss=v.toFixed(3)+' dB';
