@@ -660,23 +660,15 @@ async function showAuditSelect(){
   document.getElementById('audit-select-screen').style.display='flex';
   const list=document.getElementById('audit-select-list');
   list.innerHTML='<div style="color:var(--text2);font-size:13px;padding:12px 0">Loading audits…</div>';
-  // Fetch ALL audits for this user and filter — handles legacy IDs saved with different codes/names
-  const sysDef=SYSTEMS[selectedSystem];
-  const stDef=sysDef?.stations[selectedStation];
-  const stName=(stDef?.name||'').toLowerCase();
-  const sysName=(sysDef?.name||'').toLowerCase();
-  const stCode=selectedStation.toLowerCase();
-  const sysCode=selectedSystem.toLowerCase();
-  let{data:allData}=await sb.from('trigva_audits').select('*')
+  // Direct query — station_id and system_id match exactly what is stored (MBS / EQU)
+  const{data,error}=await sb.from('trigva_audits').select('*')
+    .eq('station_id',selectedStation).eq('system_id',selectedSystem)
     .order('created_at',{ascending:false});
-  // Match on code OR name (case-insensitive) for both station and system
-  let data=(allData||[]).filter(a=>{
-    const aStation=(a.station_id||'').toLowerCase();
-    const aSystem=(a.system_id||'').toLowerCase();
-    const stationMatch=aStation===stCode||aStation===stName||(stCode&&aStation.includes(stCode))||(stName&&aStation.includes(stName));
-    const systemMatch=aSystem===sysCode||aSystem===sysName||(sysCode&&aSystem.includes(sysCode))||(sysName&&aSystem.includes(sysName));
-    return stationMatch&&systemMatch;
-  });
+  if(error){
+    list.innerHTML=`<div style="color:var(--warn);font-size:13px;padding:12px 0">Error loading audits: ${error.message}</div>`;
+    console.error('Audit load error:',error);
+    return;
+  }
   if(!data||data.length===0){
     list.innerHTML=`<div style="color:var(--text2);font-size:13px;padding:12px 0">No previous audits found for <strong>${selectedSystem} · ${selectedStation}</strong>. Start a new one below.</div>`;
     return;
@@ -1054,7 +1046,7 @@ function renderManholeCard(mh,idx,pd){
   const mFields=[
     ['Latitude',`mh_${id}_lat`,'','short'],['Longitude',`mh_${id}_lng`,'','short'],
     ['Manhole number',`mh_${id}_num`,'Number','short'],
-    ['Manhole type',`mh_${id}_type`,'BMH / Vault / Pull MH / Intermediate MH',''],
+    ['Manhole type',`mh_${id}_type`,'__SELECT__BMH|Vault|Pull Manhole|Intermediate Manhole',''],
     ['Lid type',`mh_${id}_ltype`,'Cast iron/fibre crete/concrete',''],
     ['Lid shape',`mh_${id}_lshape`,'Round/Rect/Square',''],['Covered with debris/sand?',`mh_${id}_debris`,'Type',''],
     ['Lid welded closed?',`mh_${id}_welded`,'Yes/No','short'],['Extractor fan required?',`mh_${id}_fan`,'Yes/No','short'],
@@ -1081,14 +1073,19 @@ function renderManholeCard(mh,idx,pd){
     </div>
     <div class="manhole-card-body" id="mhbody-${id}">
       <div class="audit-group" style="margin:0;border:none;border-radius:0">
-        ${mFields.map(([label,key,ph,cls],i)=>`
-          <div class="audit-row">
+        ${mFields.map(([label,key,ph,cls],i)=>{
+          const isSelect=ph.startsWith('__SELECT__');
+          const opts=isSelect?ph.replace('__SELECT__','').split('|'):[];
+          const input=isSelect
+            ?`<select class="row-input ${cls}" data-mh="${id}" data-key="${key}">${['','...'].concat(opts).map(o=>`<option value="${o}" ${d[key]===o?'selected':''}>${o||'— select type —'}</option>`).join('')}</select>`
+            :`<input class="row-input ${cls}" data-mh="${id}" data-key="${key}" value="${esc(d[key]||'')}" placeholder="${ph}">`;
+          return `<div class="audit-row">
             <div class="row-num">${i+1}</div>
             <div class="row-content"><div class="row-label">${label}</div>
-              <div class="row-inputs"><input class="row-input ${cls}" data-mh="${id}" data-key="${key}" value="${esc(d[key]||'')}" placeholder="${ph}"></div>
+              <div class="row-inputs">${input}</div>
             </div>
             <div class="row-check">${chk(key+'_ck',d)}</div>
-          </div>`).join('')}
+          </div>`;}).join('')}
       </div>
       <div style="padding:10px 16px">
         <textarea class="comments-area" data-mh="${id}" data-key="mh_${id}_comments" style="min-height:56px">${esc(d[`mh_${id}_comments`]||'')}</textarea>
