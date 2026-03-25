@@ -242,7 +242,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
     <div id="register-form" class="hidden">
       <div class="auth-title">Create Account</div>
-      <div class="auth-sub">All accounts start as Field Engineer</div>
+      <div class="auth-sub">All new accounts are registered as <strong>Field Engineer</strong>. Supervisor access can be granted by your administrator after registration.</div>
       <div class="field"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your full name"></div>
       <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="work@email.com"></div>
       <div class="field"><label>Password</label><input type="password" id="reg-pass" placeholder="Min 8 characters"></div>
@@ -1740,11 +1740,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Never auto-skip the login screen — always show it first so new users can register.
-sb.auth.onAuthStateChange(async(event,session)=>{
-  if((event==='SIGNED_IN')&&session&&!currentUser){
-    await goToSystemSelect(session.user);
-  }
-});
+// NEVER auto-navigate on page load. Always require explicit user action.
+// onAuthStateChange is intentionally NOT used to trigger navigation —
+// it fires for stored sessions on load and would bypass the login screen.
 (async()=>{
   const{data:{session}}=await sb.auth.getSession();
   if(session&&session.user){
@@ -1752,10 +1750,10 @@ sb.auth.onAuthStateChange(async(event,session)=>{
     const banner=document.getElementById('resume-banner');
     if(banner){
       banner.innerHTML=`<div style="background:#eef6f4;border:1px solid var(--accent);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
-        <div style="font-weight:600;color:var(--accent);margin-bottom:4px;">Session found</div>
-        <div style="color:var(--text2);margin-bottom:8px;">Signed in as <strong>${session.user.email}</strong></div>
-        <button class="btn" style="padding:8px 16px;font-size:13px;" id="resume-btn">Continue as ${name} →</button>
-        <span style="margin-left:12px;font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline;" id="resume-signout">Sign out</span>
+        <div style="font-weight:600;color:var(--accent);margin-bottom:4px;">Welcome back</div>
+        <div style="color:var(--text2);margin-bottom:10px;">Signed in as <strong>${session.user.email}</strong></div>
+        <button class="btn" style="padding:8px 16px;font-size:13px;margin-bottom:6px;" id="resume-btn">Continue as ${name} →</button><br>
+        <span style="font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline;" id="resume-signout">Not you? Sign out</span>
       </div>`;
       banner.style.display='block';
       document.getElementById('resume-btn').addEventListener('click',async()=>{
