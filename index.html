@@ -1042,7 +1042,7 @@ function renderS6(data){
 
 function renderManholeCard(mh,idx,pd){
   const id=mh.id||idx;
-  const d=(pd._mhdata&&pd._mhdata[id])||{};
+  const d=mh.data||{};
   const mFields=[
     ['Latitude',`mh_${id}_lat`,'','short'],['Longitude',`mh_${id}_lng`,'','short'],
     ['Manhole number',`mh_${id}_num`,'Number','short'],
@@ -1084,7 +1084,7 @@ function renderManholeCard(mh,idx,pd){
             <div class="row-content"><div class="row-label">${label}</div>
               <div class="row-inputs">${input}</div>
             </div>
-            <div class="row-check">${chk(key+'_ck',d)}</div>
+            <div class="row-check"></div>
           </div>`;}).join('')}
       </div>
       <div style="padding:10px 16px">
@@ -1659,22 +1659,21 @@ return `<table><thead><tr><th>#</th><th>Colour</th><th>Span Length (km)</th><th>
 ${(()=>{const s=ad.s6||{};
 const mhs=s.manholes||[];
 const mhTable=mhs.length?`<h2>Manholes</h2>`+mhs.map((mh,idx)=>{
-  const sd=ad.s6||{};
-  const pd=sd._mhdata||(sd.manholes&&sd.manholes[idx]&&sd.manholes[idx].data)||{};
   const id=mh.id;
-  const mhNum=pd['mh_'+id+'_num']||mh.data?.['mh_'+id+'_num']||'';
-  const mhType=pd['mh_'+id+'_type']||mh.data?.['mh_'+id+'_type']||'—';
-  const lat=pd['mh_'+id+'_lat']||mh.data?.['mh_'+id+'_lat']||'—';
-  const lng=pd['mh_'+id+'_lng']||mh.data?.['mh_'+id+'_lng']||'—';
-  const locked=pd['mh_'+id+'_locked']||mh.data?.['mh_'+id+'_locked']||'—';
-  const water=pd['mh_'+id+'_water']||mh.data?.['mh_'+id+'_water']||'—';
-  const lab=pd['mh_'+id+'_lab']||mh.data?.['mh_'+id+'_lab']||'—';
-  const dims=pd['mh_'+id+'_dims']||mh.data?.['mh_'+id+'_dims']||'—';
-  const ducts_sea=pd['mh_'+id+'_dsea']||mh.data?.['mh_'+id+'_dsea']||'—';
-  const ducts_cls=pd['mh_'+id+'_dcls']||mh.data?.['mh_'+id+'_dcls']||'—';
-  const oslack=pd['mh_'+id+'_oslack']||mh.data?.['mh_'+id+'_oslack']||'—';
-  const spare=pd['mh_'+id+'_spare']||mh.data?.['mh_'+id+'_spare']||'—';
-  const cmt=pd['mh_'+id+'_comments']||mh.data?.['mh_'+id+'_comments']||'';
+  const pd=mh.data||{};
+  const mhNum=pd['mh_'+id+'_num']||'';
+  const mhType=pd['mh_'+id+'_type']||'—';
+  const lat=pd['mh_'+id+'_lat']||'—';
+  const lng=pd['mh_'+id+'_lng']||'—';
+  const locked=pd['mh_'+id+'_locked']||'—';
+  const water=pd['mh_'+id+'_water']||'—';
+  const lab=pd['mh_'+id+'_lab']||'—';
+  const dims=pd['mh_'+id+'_dims']||'—';
+  const ducts_sea=pd['mh_'+id+'_dsea']||'—';
+  const ducts_cls=pd['mh_'+id+'_dcls']||'—';
+  const oslack=pd['mh_'+id+'_oslack']||'—';
+  const spare=pd['mh_'+id+'_spare']||'—';
+  const cmt=pd['mh_'+id+'_comments']||'';
   return `<h3>Manhole ${idx+1}${mhNum?' — MH '+mhNum:''}</h3><table class="kv-table">
   <tr><td>Type</td><td>${mhType}</td></tr>
   <tr><td>Coordinates</td><td>${lat}, ${lng}</td></tr>
