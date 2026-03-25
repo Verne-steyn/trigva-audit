@@ -660,11 +660,25 @@ async function showAuditSelect(){
   document.getElementById('audit-select-screen').style.display='flex';
   const list=document.getElementById('audit-select-list');
   list.innerHTML='<div style="color:var(--text2);font-size:13px;padding:12px 0">Loading audits…</div>';
-  const{data}=await sb.from('trigva_audits').select('*')
-    .eq('station_id',selectedStation).eq('system_id',selectedSystem)
+  // Fetch ALL audits for this user and filter — handles legacy IDs saved with different codes/names
+  const sysDef=SYSTEMS[selectedSystem];
+  const stDef=sysDef?.stations[selectedStation];
+  const stName=(stDef?.name||'').toLowerCase();
+  const sysName=(sysDef?.name||'').toLowerCase();
+  const stCode=selectedStation.toLowerCase();
+  const sysCode=selectedSystem.toLowerCase();
+  let{data:allData}=await sb.from('trigva_audits').select('*')
     .order('created_at',{ascending:false});
+  // Match on code OR name (case-insensitive) for both station and system
+  let data=(allData||[]).filter(a=>{
+    const aStation=(a.station_id||'').toLowerCase();
+    const aSystem=(a.system_id||'').toLowerCase();
+    const stationMatch=aStation===stCode||aStation===stName||(stCode&&aStation.includes(stCode))||(stName&&aStation.includes(stName));
+    const systemMatch=aSystem===sysCode||aSystem===sysName||(sysCode&&aSystem.includes(sysCode))||(sysName&&aSystem.includes(sysName));
+    return stationMatch&&systemMatch;
+  });
   if(!data||data.length===0){
-    list.innerHTML='<div style="color:var(--text2);font-size:13px;padding:12px 0">No previous audits found. Start a new one below.</div>';
+    list.innerHTML=`<div style="color:var(--text2);font-size:13px;padding:12px 0">No previous audits found for <strong>${selectedSystem} · ${selectedStation}</strong>. Start a new one below.</div>`;
     return;
   }
   list.innerHTML=data.map(a=>{
