@@ -289,6 +289,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
 </div>
 
+<!-- AUDIT SELECT -->
+<div id="audit-select-screen" style="display:none;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#e8f4f2 0%,#f4f6f9 60%);">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;width:100%;max-width:620px;">
+    <div class="asn-badge" id="audit-select-badge">Station</div>
+    <div class="asn-title" style="margin-bottom:6px">Select Audit</div>
+    <div class="asn-sub" style="margin-bottom:24px">Choose an existing audit to continue or generate a report, or start a new one.</div>
+    <div id="audit-select-list" style="margin-bottom:20px"></div>
+    <button class="btn" onclick="startNewAudit()" style="margin-bottom:10px">+ Start New Audit</button>
+    <div style="margin-top:8px">
+      <button class="btn btn-outline btn-sm" onclick="backToSystemSelect()" style="width:auto">← Back</button>
+    </div>
+  </div>
+</div>
+
 <!-- APP -->
 <div id="app">
   <div class="topbar">
@@ -636,13 +650,90 @@ function handleASNFile(file){
 
 async function proceedAfterASN(){
   document.getElementById('asn-screen').style.display='none';
+  await showAuditSelect();
+}
+
+async function showAuditSelect(){
+  const sys=SYSTEMS[selectedSystem];
+  const st=sys.stations[selectedStation];
+  document.getElementById('audit-select-badge').textContent=`${selectedSystem} · ${selectedStation} — ${st.name}`;
+  document.getElementById('audit-select-screen').style.display='flex';
+  const list=document.getElementById('audit-select-list');
+  list.innerHTML='<div style="color:var(--text2);font-size:13px;padding:12px 0">Loading audits…</div>';
+  const{data}=await sb.from('trigva_audits').select('*')
+    .eq('station_id',selectedStation).eq('system_id',selectedSystem)
+    .order('created_at',{ascending:false});
+  if(!data||data.length===0){
+    list.innerHTML='<div style="color:var(--text2);font-size:13px;padding:12px 0">No previous audits found. Start a new one below.</div>';
+    return;
+  }
+  list.innerHTML=data.map(a=>{
+    const date=a.created_at?a.created_at.slice(0,10):'—';
+    const updated=a.updated_at?a.updated_at.slice(0,10):'—';
+    const isDraft=a.status==='draft';
+    const pill=isDraft
+      ?'<span style="background:rgba(255,107,53,.15);color:var(--warn);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600">Draft</span>'
+      :'<span style="background:rgba(34,197,94,.15);color:var(--success);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600">Submitted</span>';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;background:var(--bg)">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">Audit — Created ${date} · Last saved ${updated}</div>
+        <div style="display:flex;gap:8px;align-items:center">${pill}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" style="width:auto;padding:6px 14px" onclick="openAudit('${a.id}','${a.status}')">
+          ${isDraft?'Continue →':'Reopen & Edit'}
+        </button>
+        <button class="btn btn-sm btn-outline" style="width:auto;padding:6px 14px" onclick="previewReport('${a.id}')">📄 Report</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function openAudit(id, status){
+  // If submitted, reopen as draft
+  if(status==='submitted'){
+    await sb.from('trigva_audits').update({status:'draft'}).eq('id',id);
+    toast('Audit reopened for editing','ok');
+  }
+  const{data}=await sb.from('trigva_audits').select('*').eq('id',id).single();
+  if(data){
+    currentAuditId=data.id;
+    auditData=data.data_json||{};
+    if(data.asn_filename){asnFileName=data.asn_filename;asnUploaded=true;}
+  }
+  document.getElementById('audit-select-screen').style.display='none';
+  await initEngineerApp();
+}
+
+async function previewReport(id){
+  const{data}=await sb.from('trigva_audits').select('*').eq('id',id).single();
+  if(!data){toast('Could not load audit','err');return;}
+  // Temporarily swap auditData to generate report for this audit
+  const savedData=auditData;
+  const savedId=currentAuditId;
+  auditData=data.data_json||{};
+  currentAuditId=data.id;
+  if(data.asn_filename){asnFileName=data.asn_filename;}
+  generateReport();
+  // Restore
+  auditData=savedData;
+  currentAuditId=savedId;
+}
+
+async function startNewAudit(){
+  const{data:na}=await sb.from('trigva_audits').insert({
+    station_id:selectedStation, system_id:selectedSystem,
+    submitted_by:currentUser.id, status:'draft', data_json:{},
+    asn_filename:asnFileName||null, asn_base64:asnFileBase64||null
+  }).select().single();
+  if(na){currentAuditId=na.id;auditData={};}
+  document.getElementById('audit-select-screen').style.display='none';
   await initEngineerApp();
 }
 
 function skipASN(){
-  asnUploaded=false; asnFileBase64=null; asnFileName=null;
   document.getElementById('asn-screen').style.display='none';
-  initEngineerApp();
+  showAuditSelect();
 }
 
 function backToSystemSelect(){
@@ -720,23 +811,9 @@ function initSupervisorApp(){
 
 // ── AUDIT LOAD/SAVE ──
 async function loadOrCreateAudit(){
-  const{data}=await sb.from('trigva_audits').select('*')
-    .eq('station_id',selectedStation).eq('system_id',selectedSystem).eq('status','draft')
-    .order('created_at',{ascending:false}).limit(1);
-  if(data&&data.length>0){
-    currentAuditId=data[0].id;
-    auditData=data[0].data_json||{};
-    if(data[0].asn_filename){asnFileName=data[0].asn_filename;asnUploaded=true;}
-    if(asnFileBase64){
-      await sb.from('trigva_audits').update({asn_filename:asnFileName,asn_base64:asnFileBase64}).eq('id',currentAuditId);
-    }
-  } else {
-    const{data:na}=await sb.from('trigva_audits').insert({
-      station_id:selectedStation, system_id:selectedSystem,
-      submitted_by:currentUser.id, status:'draft', data_json:{},
-      asn_filename:asnFileName||null, asn_base64:asnFileBase64||null
-    }).select().single();
-    if(na){currentAuditId=na.id;auditData={};}
+  // audit data already set by openAudit() or startNewAudit() — just update ASN if needed
+  if(asnFileBase64&&currentAuditId){
+    await sb.from('trigva_audits').update({asn_filename:asnFileName,asn_base64:asnFileBase64}).eq('id',currentAuditId);
   }
   updateASNIndicator();
 }
@@ -761,8 +838,9 @@ async function submitAudit(){
   await saveAudit();
   await sb.from('trigva_audits').update({status:'submitted',submitted_at:new Date().toISOString()}).eq('id',currentAuditId);
   toast('Audit submitted ✓','ok');
-  await loadOrCreateAudit();
-  renderSection('info');
+  // Return to audit select so user can see the submitted audit and generate report
+  document.getElementById('app').style.display='none';
+  await showAuditSelect();
 }
 
 function collectCurrentSection(){
