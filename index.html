@@ -1497,14 +1497,14 @@ function renderReportPanel(){
 }
 
 // ── REPORT GENERATION ──
-async function generateReport(){
+function generateReport(){
   collectCurrentSection(); // ensure latest form data is captured
   const sys=SYSTEMS[selectedSystem];
   const st=sys.stations[selectedStation];
   const ad=auditData;
   const d=ad.info||{};
 
-  const html=await (async()=>`<!DOCTYPE html>
+  const html=`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1736,42 +1736,86 @@ ${(()=>{const s=ad.s11||{};const acts=s.activities||[];
 if(!acts.length||!acts[0].date)return '<p>No diary entries recorded.</p>';
 const rows=acts.filter(a=>a.date||a.desc).map(a=>`<tr><td>${a.date||'—'}</td><td>${a.desc||'—'}</td><td>${a.loc||'—'}</td><td>${a.part||'—'}</td><td>${a.rem||'—'}</td></tr>`).join('');
 return `<table><thead><tr><th>Date</th><th>Activity</th><th>Location</th><th>Participants</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
-${await(async()=>{
-  // Build a data summary to send to the AI
+${(()=>{
+  // Generate conclusion from audit data — no API needed
   const s2=ad.s2||{},s3=ad.s3||{},s4=ad.s4||{},s6=ad.s6||{},s7=ad.s7||{},s8=ad.s8||{},s9=ad.s9||{};
-  const toolNames=['Water pump pliers','Cutting pliers','Mini bolt cutters','Snipe nose pliers','Combination pliers','Electrical shears','Grip pliers','Screwdrivers','Measuring tape','Steel ruler','Cutter knife','Hacksaw','Spanners','Allen keys','Adjustable spanner','Hammer','Mallet','Spirit level','Tool bag','Tool chest','Cordless drill','Cordless grinder','Heat gun','Portable lights','Battery charger','Dremel tool','Crimping pliers','Torque wrenches','Cable stripper','Dryer'];
+  const toolNames=['Water pump pliers','Cutting pliers – side cutter','Mini bolt cutters','Snipe nose pliers','Combination pliers','Electrical shears','Grip pliers – vice grip','Set of screwdrivers','File flat with handle','Measuring tape','Steel ruler','Cutter knife','Cutter blades','Hacksaw','Set of flat spanners','Set of Allen keys','Adjustable spanner','Hammer','Mallet','Spirit level','Tool organiser bag','Tool chest','Rachet insert','Universal bit holder','Rachet set','Crimping pliers','Nylon strap wrenches','C spanner','Digital caliper','Cable tie pliers','Cordless drill','SDS drill','Angle grinder','Heat gun','Portable lights','Battery charger','Drill set SDS','Dremel tool','Dremel mandrel','Dremel cutting disk','Dremel flexible shaft','Mobile workbench','Sheath stripper','Thermohydrometer','Bending claw','Triangular needle file','Torque wrench 10–15 Nm','Torque wrench 40–400 Nm','Torque screwdriver 0.5–2.5 Nm','Torque screwdriver 2–10 Nm','Ratchet handle','10mm spanner','11mm spanner','13mm spanner','17mm spanner','19mm spanner','Socket adaptor','Toolbox','Mandrel','Wedge for URC2','Kynar shrink tool','OALC2 continuity tool','Tin opener tool','Spare dryer tip','Spiral cutter ALROC','ALROC blades','Specific tool cutter','Tube cutter blades','Cable stripper','Blade MK01A','Tool Ripley WS50','WS50 spare blade','Dryer refill','Dryer','Hand air pump','OCC-SC300 CEP tool'];
+  const presentTools=toolNames.filter((_,i)=>s7['s7_'+i]==='Yes').length;
   const missingTools=toolNames.filter((_,i)=>s7['s7_'+i]==='No');
-  const fibres=[];for(let i=1;i<=32;i++){if(s8['s8_f'+i+'_col'])fibres.push({col:s8['s8_f'+i+'_col'],dist:s8['s8_f'+i+'_dist'],loss:s8['s8_f'+i+'_loss'],cmt:s8['s8_f'+i+'_cmt']});}
-  const mhs=(s6.manholes||[]).map(mh=>{const d=mh.data||{};const id=mh.id;return {num:d['mh_'+id+'_num'],type:d['mh_'+id+'_type'],water:d['mh_'+id+'_water'],locked:d['mh_'+id+'_locked'],lab:d['mh_'+id+'_lab']};});
-  const summary={
-    station:selectedStation,system:selectedSystem,
-    auditDate:ad.info?.audit_date,auditors:ad.info?.auditors,
-    spareCable:{oalc4Drums:s2.s2_oalc4n,oalc4Len:s2.s2_oalc4_len,nexDrums:s2.s2_nexn,fibres:s2.s2_fibres,condition:s2.s2_cond,oalc4EP:s2.s2_oalc4_ep,comments:s2.s2_comments},
-    jointing:{o4qty:s3.s3_o4qty,bmhqty:s3.s3_bmhqty,eqty:s3.s3_eqty,comments:s3.s3_comments},
-    route:{patrolled:s6.s6_patrol,security:s6.s6_sec,inspected:s6.s6_insp,thirdParty:s6.s6_3p,manholes:mhs,comments:s6.s6_comments},
-    missingTools:missingTools.length?missingTools:[],toolComments:s7.s7_comments,
-    fibresTotal:fibres.length,
-    irTests:{oalc4d1:{val:s9.s9_o4d1_val,pf:s9.s9_o4d1_pf}},
-    allComments:[s2.s2_comments,s3.s3_comments,s6.s6_comments,s7.s7_comments,s9.s9_comments].filter(Boolean)
-  };
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        system:'You are a technical writer producing a formal audit report conclusion for a submarine cable landing station. Write in professional third-person prose. Be concise, factual and specific. Use only the data provided. Structure the conclusion with: a brief overall assessment, key findings (positive and negative), and specific recommendations. Do not use bullet points — write in paragraphs. Keep to 250-350 words.',
-        messages:[{role:'user',content:'Write a conclusion section for this cable route audit: '+JSON.stringify(summary)}]
-      })
-    });
-    const r=await resp.json();
-    const txt=r.content?.[0]?.text||'';
-    if(!txt)return '<p>Conclusion could not be generated.</p>';
-    return '<div class="page-break"></div><h1>8. Conclusion</h1><div style="line-height:1.8;font-size:11pt">'+txt.replace(/\n\n/g,'</p><p>').replace(/\n/g,' ').replace(/^/,'<p>').replace(/$/,'</p>')+'</div>';
-  }catch(e){
-    return '<div class="page-break"></div><h1>8. Conclusion</h1><p>Conclusion could not be generated at this time.</p>';
+  const totalChecked=toolNames.filter((_,i)=>s7['s7_'+i]).length;
+  const fibres=[];for(let i=1;i<=32;i++){if(s8['s8_f'+i+'_col'])fibres.push(i);}
+  const mhs=s6.manholes||[];
+  const waterMH=mhs.filter(mh=>{const d=mh.data||{};return d['mh_'+mh.id+'_water']==='Yes';});
+  const unlockedMH=mhs.filter(mh=>{const d=mh.data||{};return d['mh_'+mh.id+'_locked']==='No';});
+  const irPass=[];const irFail=[];
+  for(let i=1;i<=4;i++){const pf=s9['s9_o4d'+i+'_pf'];if(pf==='Pass')irPass.push(i);if(pf==='Fail')irFail.push(i);}
+  const allComments=[s2.s2_comments,s3.s3_comments,s6.s6_comments,s7.s7_comments,s9.s9_comments].filter(Boolean);
+
+  let paras=[];
+
+  // Opening assessment
+  const stName=st.name+', '+st.country;
+  paras.push('This report presents the findings of the land cable route audit conducted at the '+stName+' Cable Landing Station for the '+sys.name+' submarine cable system'+(d.audit_date?' on '+d.audit_date:'')+'. The audit was conducted by '+(d.auditors||'the audit team')+' and covered all key aspects of the land cable infrastructure, including spare cable assets, jointing equipment, test equipment, tools inventory, manhole condition, fibre test results, and health and safety compliance.');
+
+  // Spare cable
+  let cablePara='With respect to spare cable assets, ';
+  if(s2.s2_oalc4n)cablePara+='a total of '+s2.s2_oalc4n+' OALC4 drum(s) were found on site';
+  if(s2.s2_nexn)cablePara+=(s2.s2_oalc4n?' alongside ':'')+s2.s2_nexn+' Nexans drum(s)';
+  if(s2.s2_cond)cablePara+=', in '+s2.s2_cond.toLowerCase()+' condition';
+  cablePara+='. ';
+  if(s2.s2_oalc4_ep)cablePara+='Cable end protection for the OALC4 drum was recorded as '+s2.s2_oalc4_ep+'. ';
+  if(s2.s2_oalc4_otdr)cablePara+='The optical length of the OALC4 cable as measured by OTDR was '+s2.s2_oalc4_otdr+' metres. ';
+  if(s2.s2_comments)cablePara+='The following observation was noted: '+s2.s2_comments+'. ';
+  if(cablePara.length>50)paras.push(cablePara);
+
+  // Tools
+  if(totalChecked>0){
+    let toolPara='The tools inventory audit covered '+totalChecked+' items, of which '+presentTools+' were confirmed present and accounted for. ';
+    if(missingTools.length===0)toolPara+='No tools were found to be missing, indicating a well-maintained and complete jointing toolkit. ';
+    else toolPara+=missingTools.length+' item(s) were identified as absent: '+missingTools.slice(0,5).join(', ')+(missingTools.length>5?' and others':'')+'. It is recommended that the missing items be procured and replenished prior to the next jointing operation. ';
+    if(s7.s7_comments)toolPara+=s7.s7_comments+'. ';
+    paras.push(toolPara);
   }
+
+  // Manholes
+  if(mhs.length>0){
+    let mhPara='A total of '+mhs.length+' manhole(s) were inspected along the cable route. ';
+    if(waterMH.length>0)mhPara+=waterMH.length+' manhole(s) were reported to fill with water, which poses a risk to cable integrity and requires attention. ';
+    else mhPara+='No manholes were found to be prone to water ingress. ';
+    if(unlockedMH.length>0)mhPara+=unlockedMH.length+' manhole lid(s) were found to be unlocked, representing a security vulnerability that should be addressed. ';
+    else mhPara+='All manhole lids were confirmed to be locked and secured. ';
+    if(s6.s6_patrol)mhPara+='The route was'+(s6.s6_patrol==='Yes'?' confirmed to be':' reported as not being')+' regularly patrolled. ';
+    if(s6.s6_comments)mhPara+=s6.s6_comments+'. ';
+    paras.push(mhPara);
+  }
+
+  // Test results
+  if(fibres.length>0||irPass.length>0||irFail.length>0){
+    let testPara='Regarding electrical and optical testing, ';
+    if(fibres.length>0)testPara+=fibres.length+' optical fibres were tested and results recorded via OTDR trace analysis. ';
+    if(irPass.length>0)testPara+='Insulation resistance tests on OALC4 drum(s) '+irPass.join(', ')+' returned a Pass result. ';
+    if(irFail.length>0)testPara+='Drum(s) '+irFail.join(', ')+' failed the IR test and require investigation. ';
+    paras.push(testPara);
+  }
+
+  // Closing
+  let closing='In summary, the audit of the '+stName+' station provides a comprehensive baseline assessment of the land cable route infrastructure. ';
+  if(missingTools.length>0||waterMH.length>0||unlockedMH.length>0||irFail.length>0){
+    closing+='Several action items have been identified that require follow-up, including ';
+    const actions=[];
+    if(missingTools.length>0)actions.push('replenishment of '+missingTools.length+' missing tool(s)');
+    if(waterMH.length>0)actions.push('remediation of water ingress in '+waterMH.length+' manhole(s)');
+    if(unlockedMH.length>0)actions.push('securing of '+unlockedMH.length+' unlocked manhole lid(s)');
+    if(irFail.length>0)actions.push('investigation of failed IR test results');
+    closing+=actions.join(', ')+'. ';
+  } else {
+    closing+='The station is in a satisfactory state of readiness with no critical deficiencies identified during this audit. ';
+  }
+  closing+='It is recommended that a follow-up audit be scheduled in accordance with the standard audit cycle to ensure continued compliance and operational readiness.';
+  paras.push(closing);
+
+  const body=paras.map(p=>'<p style="margin-bottom:14px">'+p+'</p>').join('');
+  return '<div class="page-break"></div><h1>8. Conclusion</h1><div style="line-height:1.8;font-size:11pt">'+body+'</div>';
 })()}
 ${(()=>{const s={...(ad.s12||{})};
 const cats=[
@@ -1802,7 +1846,7 @@ keys.forEach(k=>{const num=k.replace('otdr_f','').replace('_file','');const labe
 out+='<div style="margin-bottom:20px"><h3>'+label+(name?' ('+name+')':'')+'</h3><iframe src="'+fd+'" style="width:100%;height:600px;border:1px solid #ddd" title="'+label+'"></iframe></div>';});
 return out;})()}
 <div class="footer">Report generated by Trigva Audit Platform · ${new Date().toLocaleDateString('en-GB')} · ${sys.name} · ${st.name}</div>
-</div></body></html>`)();
+</div></body></html>`;
   const win=window.open('','_blank');
   if(win){win.document.write(html);win.document.close();}
   else{alert('Please allow popups for this site to view the report.');}
