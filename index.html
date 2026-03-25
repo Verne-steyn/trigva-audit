@@ -660,12 +660,13 @@ async function showAuditSelect(){
   document.getElementById('audit-select-screen').style.display='flex';
   const list=document.getElementById('audit-select-list');
   list.innerHTML='<div style="color:var(--text2);font-size:13px;padding:12px 0">Loading audits…</div>';
-  // Direct query — station_id and system_id match exactly what is stored (MBS / EQU)
-  const{data,error}=await sb.from('trigva_audits').select('*')
+  // Select only metadata columns — exclude data_json (contains large base64 photos/PDFs)
+  const{data,error}=await sb.from('trigva_audits')
+    .select('id,station_id,system_id,status,created_at,updated_at,asn_filename,submitted_by')
     .eq('station_id',selectedStation).eq('system_id',selectedSystem)
     .order('created_at',{ascending:false});
   if(error){
-    list.innerHTML=`<div style="color:var(--warn);font-size:13px;padding:12px 0">Error loading audits: ${error.message}</div>`;
+    list.innerHTML=`<div style="color:var(--warn);font-size:13px;padding:12px 0">Error: ${error.message}</div>`;
     console.error('Audit load error:',error);
     return;
   }
