@@ -851,7 +851,7 @@ function renderAuditInfo(data){
     ${fi('city','City','','')}
     ${fi('country','Country',st.country||'','')}
   </div>
-  ${fi('auditors','Audit Done By','','Names of auditors')}
+  ${fi('auditors','Audit Done By',data.auditors||'Garth Mason','Names of auditors')}
   ${fi('depot_name','Cable Depot / Storage Name','','')}
   <div class="divider"></div>
   <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Complete all sections using the sidebar. Tick the ✓ checkbox on each row when verified. Use <strong style="color:var(--text)">Generate Report</strong> when the audit is complete.</p>
@@ -1488,12 +1488,23 @@ ${(()=>{const s=ad.s1||{};if(!s.s1_cls)return '';return `<h2>Site Information</h
 <h2>3.1 Spare Cable</h2>
 ${(()=>{const s=ad.s2||{};return `<table class="kv-table">
   <tr><td>Drum protection</td><td>${s.s2_cover||'—'}</td></tr>
+  <tr><td>Drum condition</td><td>${s.s2_cond||'—'}</td></tr>
+  <tr><td>Drum orientation</td><td>${s.s2_orient||'—'}</td></tr>
   <tr><td>Fibre count</td><td>${s.s2_fibres||'—'}</td></tr>
-  <tr><td>OALC4 drums</td><td>${s.s2_oalc4n||'—'}</td></tr>
-  <tr><td>OALC4 drum no.</td><td>${s.s2_oalc4_dnum||'—'}</td></tr>
-  <tr><td>OALC4 length</td><td>${s.s2_oalc4_len||'—'} m</td></tr>
-  <tr><td>Optical length (OTDR)</td><td>${s.s2_oalc4_otdr||'—'} m</td></tr>
+  <tr><td>Drum complete (no cable used)</td><td>${s.s2_complete||'—'}${s.s2_used?' — '+s.s2_used+' m used':''}</td></tr>
+  <tr><td>OALC4 drums available</td><td>${s.s2_oalc4n||'—'}</td></tr>
+  <tr><td>Nexans drums available</td><td>${s.s2_nexn||'—'}</td></tr>
+  <tr><td>OALC4 drum no. / length</td><td>${s.s2_oalc4_dnum||'—'} / ${s.s2_oalc4_len||'—'} m</td></tr>
+  <tr><td>Nexans drum no. / length</td><td>${s.s2_nex_dnum||'—'} / ${s.s2_nex_len||'—'} m</td></tr>
+  <tr><td>Optical length OALC4 (OTDR)</td><td>${s.s2_oalc4_otdr||'—'} m</td></tr>
+  <tr><td>Cable length Nexans</td><td>${s.s2_nex_clen||'—'} m</td></tr>
+  <tr><td>IR test — OALC4 copper to armouring</td><td>${s.s2_oalc4_ir||'—'}</td></tr>
+  <tr><td>IR test — Nexans Cond A to B</td><td>${s.s2_nex_irab||'—'}</td></tr>
+  <tr><td>IR test — Nexans Cond A to Armouring</td><td>${s.s2_nex_iraa||'—'}</td></tr>
+  <tr><td>IR test — Nexans Cond B to Armouring</td><td>${s.s2_nex_irba||'—'}</td></tr>
   <tr><td>Cable end protection — OALC4</td><td>${s.s2_oalc4_ep||'—'}</td></tr>
+  <tr><td>Cable end protection — Nexans</td><td>${s.s2_nex_ep||'—'}</td></tr>
+  <tr><td>Fibres ready for testing — OALC4</td><td>${s.s2_oalc4_rdy||'—'}${s.s2_oalc4_term?' — '+s.s2_oalc4_term:''}</td></tr>
 </table>${s.s2_comments?`<p><strong>Comments:</strong> ${s.s2_comments}</p>`:''}`;})()}
 <h2>3.2 Jointing Kits</h2>
 ${(()=>{const s=ad.s3||{};return `<table class="kv-table">
