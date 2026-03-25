@@ -414,8 +414,10 @@ let currentView = 'engineer'; // tracks whether supervisor is in engineer or sup
 
 // ── AUTH ──
 function switchTab(tab) {
-  document.getElementById('tab-login').classList.toggle('active', tab==='login');
-  document.getElementById('tab-register').classList.toggle('active', tab==='register');
+  const tl=document.getElementById('tab-login');
+  const tr=document.getElementById('tab-register');
+  if(tl) tl.classList.toggle('active', tab==='login');
+  if(tr) tr.classList.toggle('active', tab==='register');
   document.getElementById('login-form').classList.toggle('hidden',tab!=='login');
   document.getElementById('register-form').classList.toggle('hidden',tab!=='register');
   setAuthMsg('','');
