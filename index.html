@@ -851,7 +851,7 @@ function renderAuditInfo(data){
     ${fi('city','City','','')}
     ${fi('country','Country',st.country||'','')}
   </div>
-  ${fi('auditors','Audit Done By',userProfile?.name||'','Names of auditors')}
+  ${fi('auditors','Audit Done By','','Names of auditors')}
   ${fi('depot_name','Cable Depot / Storage Name','','')}
   <div class="divider"></div>
   <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Complete all sections using the sidebar. Tick the ✓ checkbox on each row when verified. Use <strong style="color:var(--text)">Generate Report</strong> when the audit is complete.</p>
@@ -1405,6 +1405,7 @@ function renderReportPanel(){
 
 // ── REPORT GENERATION ──
 function generateReport(){
+  collectCurrentSection(); // ensure latest form data is captured
   const sys=SYSTEMS[selectedSystem];
   const st=sys.stations[selectedStation];
   const ad=auditData;
@@ -1539,7 +1540,7 @@ ${(()=>{const s=ad.s11||{};const acts=s.activities||[];
 if(!acts.length||!acts[0].date)return '<p>No diary entries recorded.</p>';
 const rows=acts.filter(a=>a.date||a.desc).map(a=>`<tr><td>${a.date||'—'}</td><td>${a.desc||'—'}</td><td>${a.loc||'—'}</td><td>${a.part||'—'}</td><td>${a.rem||'—'}</td></tr>`).join('');
 return `<table><thead><tr><th>Date</th><th>Activity</th><th>Location</th><th>Participants</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table>`;})()}
-${(()=>{const s=ad.s12||{};
+${(()=>{const s={...(ad.s12||{})};
 const cats=[
   {label:'A. Cable Drums',slots:[{id:'oalc4'},{id:'nexans'}]},
   {label:'B. Jointing Kits',slots:[{id:'oalc4jt'},{id:'earthkt'}]},
@@ -1562,7 +1563,7 @@ cats.forEach(cat=>{
   out+='</div>';
 });
 return out;})()}
-${(()=>{const s=ad.s13||{};const keys=Object.keys(s).filter(k=>k.endsWith('_file'));if(!keys.length)return '';
+${(()=>{const s=ad.s13||{};const keys=Object.keys(s).filter(k=>k.endsWith('_file')&&k.startsWith('otdr_'));if(!keys.length)return '';
 let out='<div class="page-break"></div><h1>Annex II — OTDR Traces</h1>';
 keys.forEach(k=>{const num=k.replace('otdr_f','').replace('_file','');const label=s['otdr_f'+num+'_label']||('Fibre '+num);const name=s['otdr_f'+num+'_name']||'';const fd=s[k];
 out+='<div style="margin-bottom:20px"><h3>'+label+(name?' ('+name+')':'')+'</h3><iframe src="'+fd+'" style="width:100%;height:600px;border:1px solid #ddd" title="'+label+'"></iframe></div>';});
