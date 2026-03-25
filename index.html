@@ -445,15 +445,25 @@ async function doLogin(){
   const pass=document.getElementById('login-pass').value;
   if(!email||!pass){setAuthMsg('Please fill in all fields.','error');return;}
   setAuthMsg('Signing in…','');
-  try {
-    const{data,error}=await Promise.race([
-      sb.auth.signInWithPassword({email,password:pass}),
-      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout — please try again')),10000))
-    ]);
-    if(error){setAuthMsg(error.message,'error');return;}
-    await goToSystemSelect(data.user);
-  } catch(e){
-    setAuthMsg(e.message,'error');
+  // Retry up to 3 times — Supabase free tier can be slow to wake up
+  for(let attempt=1;attempt<=3;attempt++){
+    try {
+      setAuthMsg(attempt>1?`Signing in… (attempt ${attempt} of 3)`:'Signing in…','');
+      const{data,error}=await Promise.race([
+        sb.auth.signInWithPassword({email,password:pass}),
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),15000))
+      ]);
+      if(error){setAuthMsg(error.message,'error');return;}
+      await goToSystemSelect(data.user);
+      return;
+    } catch(e){
+      if(e.message==='timeout'&&attempt<3){
+        await new Promise(r=>setTimeout(r,1000)); // wait 1s before retry
+        continue;
+      }
+      setAuthMsg(attempt>=3?'Connection timed out. Please check your connection and try again.':e.message,'error');
+      return;
+    }
   }
 }
 
@@ -1941,6 +1951,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // NEVER auto-navigate on page load. Always require explicit user action.
 // onAuthStateChange is intentionally NOT used to trigger navigation —
 // it fires for stored sessions on load and would bypass the login screen.
+// Wake Supabase silently on page load so login is fast
+(async()=>{try{await sb.from('trigva_profiles').select('id').limit(1);}catch(e){}})();
 (async()=>{
   const{data:{session}}=await sb.auth.getSession();
   if(session&&session.user){
