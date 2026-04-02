@@ -1,0 +1,24 @@
+name: Keep Supabase Projects Alive
+
+on:
+  schedule:
+    - cron: '0 9 * * 1,4'  # Every Monday & Thursday at 9am UTC
+  workflow_dispatch:         # Allows manual trigger from Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping EASSy CLS Supabase
+        run: |
+          curl -s "https://wpblebjftxcdfrwwguti.supabase.co/rest/v1/profiles?select=id&limit=1" \
+          -H "apikey: ${{ secrets.EASSY_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.EASSY_ANON_KEY }}"
+          echo "EASSy pinged successfully"
+
+      - name: Ping Trigva Supabase
+        run: |
+          curl -s "https://jpyukmcpkltuzobbuitn.supabase.co/rest/v1/profiles?select=id&limit=1" \
+          -H "apikey: ${{ secrets.TRIGVA_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.TRIGVA_ANON_KEY }}"
+          echo "Trigva pinged successfully"
