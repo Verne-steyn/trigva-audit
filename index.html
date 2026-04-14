@@ -1651,7 +1651,7 @@ async function generateReport(){
         spacing:{after:40}
       }),
       new Paragraph({
-        children:[txt("\t",{size:16}),new TextRun({children:[new PageNumber()],size:16,font:F,color:GREY})],
+        children:[txt("\t",{size:16}),new TextRun({children:[xo.CURRENT],size:16,font:F,color:GREY})],
         tabStops:[{type:TabStopType.RIGHT,position:CONTENT_W}]
       })
     ]});
