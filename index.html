@@ -1872,27 +1872,199 @@ async function generateReport(){
       pageBreak()
     ];
 
-    // ── CONCLUSION ──
-    const waterMH=mhs.filter(mh=>{const pd=mh.data||{};return pd['mh_'+mh.id+'_water']==='Yes';});
-    const unlockedMH=mhs.filter(mh=>{const pd=mh.data||{};return pd['mh_'+mh.id+'_locked']==='No';});
-    const irFail=[];for(let i=1;i<=4;i++){if(s9['s9_o4d'+i+'_pf']==='Fail')irFail.push(i);}
-    const fibresCount=Object.keys(s8).filter(k=>k.match(/^s8_f\d+_col$/)&&s8[k]).length;
-    const conclusionParas=[
-      "This report presents the findings of the land cable route audit conducted at the "+st.name+", "+st.country+" Cable Landing Station for the "+sys.name+" submarine cable system"+(d.audit_date?" on "+d.audit_date:"")+". The audit was conducted by "+(d.auditors||"the audit team")+" and covered all key aspects of the land cable infrastructure.",
+    // ── SECTION 8 — CONCLUSION (DATA-DRIVEN COMPOSITE VERDICT) ──
+    // Computes three independent scores from the full audit dataset, rolls them
+    // into a single headline verdict (worst-of-three), and emits prose summary
+    // and recommendations. No hand-entered conclusion text — everything here
+    // derives from s1..s11, mhs, tools and fibre/IR test data captured above.
+
+    // -- Shared fact gathering --
+    const waterMH    = mhs.filter(mh=>{const pd=mh.data||{};return pd['mh_'+mh.id+'_water']==='Yes';});
+    const unlockedMH = mhs.filter(mh=>{const pd=mh.data||{};return pd['mh_'+mh.id+'_locked']==='No';});
+    const unlabMH    = mhs.filter(mh=>{const pd=mh.data||{};return pd['mh_'+mh.id+'_lab']==='No';});
+    const irFail     = [];for(let i=1;i<=4;i++){if(s9['s9_o4d'+i+'_pf']==='Fail')irFail.push(i);}
+    const irTested   = [];for(let i=1;i<=4;i++){if(s9['s9_o4d'+i+'_pf'])irTested.push(i);}
+    const fibresCount = Object.keys(s8).filter(k=>k.match(/^s8_f\d+_col$/)&&s8[k]).length;
+
+    // -- 1) READINESS (critical infrastructure: can the station operate safely now?) --
+    // Each check contributes equally; any hard failure drops verdict to NOT READY.
+    const rChecks = [];
+    if(mhs.length>0){
+      rChecks.push({pass: waterMH.length===0,    critical:true,  label:'manhole water ingress'});
+      rChecks.push({pass: unlockedMH.length===0, critical:true,  label:'manhole lid security'});
+      rChecks.push({pass: unlabMH.length===0,    critical:false, label:'cable labelling in manholes'});
+    }
+    if(s2.s2_cond) rChecks.push({pass: !/poor|damag/i.test(s2.s2_cond), critical:false, label:'spare cable condition'});
+    if(presentTools.length+missingTools.length>0) rChecks.push({pass: missingTools.length===0, critical:false, label:'jointing toolkit completeness'});
+    const rPass     = rChecks.filter(c=>c.pass).length;
+    const rTotal    = rChecks.length;
+    const rCritFail = rChecks.some(c=>!c.pass && c.critical);
+    const rPct      = rTotal>0 ? Math.round((rPass/rTotal)*100) : null;
+    let readinessVerdict;
+    if(rTotal===0)        readinessVerdict='INSUFFICIENT DATA';
+    else if(rCritFail)    readinessVerdict='NOT READY';
+    else if(rPct>=90)     readinessVerdict='READY';
+    else                  readinessVerdict='READY WITH CONDITIONS';
+
+    // -- 2) COMPLIANCE (was the audit performed to standard: tests passed, fields captured?) --
+    const irPassRate = irTested.length>0 ? (irTested.length-irFail.length)/irTested.length : null;
+    const keyFields  = [d.audit_date, d.auditors, st.name, st.country, sys.name, s2.s2_oalc4n||s2.s2_nexn];
+    const keyFilled  = keyFields.filter(v=>v!==undefined && v!==null && v!=='').length;
+    const fieldCompleteness = keyFilled/keyFields.length;
+    const compParts = [fieldCompleteness, irPassRate===null?1:irPassRate];
+    const compPct   = Math.round((compParts.reduce((a,b)=>a+b,0)/compParts.length)*100);
+    let complianceVerdict;
+    if(irFail.length>0)   complianceVerdict='NON-COMPLIANT';
+    else if(compPct>=90)  complianceVerdict='COMPLIANT';
+    else if(compPct>=70)  complianceVerdict='PARTIAL';
+    else                  complianceVerdict='NON-COMPLIANT';
+
+    // -- 3) RISK (s10 risk assessment: weighted count of 'No' answers by category) --
+    // Category weights: H&S = 3, Security = 2, Construction = 2, Route Sharing = 1.
+    const riskWeights = {construction:2, security:2, sharing:1, hs:3};
+    const riskCatKeys = {
+      construction: Array.from({length:6}, (_,i)=>'s10_'+i+'_ans'),
+      security:     Array.from({length:7}, (_,i)=>'s10_'+(i+6)+'_ans'),
+      sharing:      Array.from({length:6}, (_,i)=>'s10_'+(i+13)+'_ans'),
+      hs:           Array.from({length:7}, (_,i)=>'s10_'+(i+25)+'_ans'),
+    };
+    let riskScore=0, riskMax=0, riskNoTotal=0, riskAnsTotal=0;
+    const riskNoByCat = {construction:0, security:0, sharing:0, hs:0};
+    Object.keys(riskCatKeys).forEach(cat=>{
+      riskCatKeys[cat].forEach(k=>{
+        const v = s10[k];
+        if(v==='Yes'||v==='No'){
+          riskAnsTotal++;
+          riskMax += riskWeights[cat];
+          if(v==='No'){ riskScore += riskWeights[cat]; riskNoTotal++; riskNoByCat[cat]++; }
+        }
+      });
+    });
+    const riskPct = riskMax>0 ? Math.round((riskScore/riskMax)*100) : null;
+    let riskVerdict;
+    if(riskAnsTotal===0)                                   riskVerdict='INSUFFICIENT DATA';
+    else if(riskNoByCat.hs>0 || riskPct>=30)               riskVerdict='HIGH';
+    else if(riskPct>=10)                                   riskVerdict='MEDIUM';
+    else                                                   riskVerdict='LOW';
+
+    // -- Composite rollup (worst of three drives the headline) --
+    const rollup = (()=>{
+      if(readinessVerdict==='NOT READY' || complianceVerdict==='NON-COMPLIANT' || riskVerdict==='HIGH')
+        return {label:'PROCEED WITH CAUTION — REMEDIATION REQUIRED', fill:'F8D7DA', color:'842029'};
+      if(readinessVerdict==='READY WITH CONDITIONS' || complianceVerdict==='PARTIAL' || riskVerdict==='MEDIUM')
+        return {label:'ACCEPTABLE — MINOR ACTIONS OUTSTANDING', fill:'FFF3CD', color:'664D03'};
+      if(readinessVerdict==='READY' && complianceVerdict==='COMPLIANT' && riskVerdict==='LOW')
+        return {label:'SATISFACTORY — NO CRITICAL ACTIONS', fill:'D1E7DD', color:'0F5132'};
+      return {label:'INSUFFICIENT DATA FOR VERDICT', fill:'E2E3E5', color:'41464B'};
+    })();
+
+    // -- Composite verdict table (three scores + headline) --
+    const verdictRow = (lbl,val,sub)=>new TableRow({children:[
+      new TableCell({width:{size:Math.floor(CONTENT_W*0.35),type:WidthType.DXA},shading:{fill:'F5F8FC',type:ShadingType.CLEAR},margins:{top:100,bottom:100,left:140,right:140},children:[new Paragraph({children:[txt(lbl,{bold:true,size:20,color:BLACK})]})]}),
+      new TableCell({width:{size:Math.floor(CONTENT_W*0.30),type:WidthType.DXA},shading:{fill:'FFFFFF',type:ShadingType.CLEAR},margins:{top:100,bottom:100,left:140,right:140},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[txt(val,{bold:true,size:22,color:BLUE})]})]}),
+      new TableCell({width:{size:CONTENT_W-Math.floor(CONTENT_W*0.35)-Math.floor(CONTENT_W*0.30),type:WidthType.DXA},shading:{fill:'FFFFFF',type:ShadingType.CLEAR},margins:{top:100,bottom:100,left:140,right:140},children:[new Paragraph({children:[txt(sub,{size:18,color:GREY,italics:true})]})]}),
+    ]});
+    const verdictHeadline = new Table({
+      width:{size:CONTENT_W,type:WidthType.DXA},
+      columnWidths:[CONTENT_W],
+      borders:{top:{style:BorderStyle.SINGLE,size:8,color:rollup.color},bottom:{style:BorderStyle.SINGLE,size:8,color:rollup.color},left:{style:BorderStyle.SINGLE,size:8,color:rollup.color},right:{style:BorderStyle.SINGLE,size:8,color:rollup.color}},
+      rows:[new TableRow({children:[new TableCell({width:{size:CONTENT_W,type:WidthType.DXA},shading:{fill:rollup.fill,type:ShadingType.CLEAR},margins:{top:180,bottom:180,left:160,right:160},children:[
+        new Paragraph({alignment:AlignmentType.CENTER,children:[txt('OVERALL VERDICT',{bold:true,size:20,color:rollup.color})]}),
+        new Paragraph({alignment:AlignmentType.CENTER,children:[txt(rollup.label,{bold:true,size:26,color:rollup.color})]}),
+      ]})]})]
+    });
+    const verdictBreakdown = new Table({
+      width:{size:CONTENT_W,type:WidthType.DXA},
+      columnWidths:[Math.floor(CONTENT_W*0.35),Math.floor(CONTENT_W*0.30),CONTENT_W-Math.floor(CONTENT_W*0.35)-Math.floor(CONTENT_W*0.30)],
+      borders:rborders,
+      rows:[
+        new TableRow({children:[
+          new TableCell({width:{size:Math.floor(CONTENT_W*0.35),type:WidthType.DXA},shading:{fill:BLUE,type:ShadingType.CLEAR},margins:{top:80,bottom:80,left:140,right:140},children:[new Paragraph({children:[txt('Dimension',{bold:true,size:18,color:WHITE})]})]}),
+          new TableCell({width:{size:Math.floor(CONTENT_W*0.30),type:WidthType.DXA},shading:{fill:BLUE,type:ShadingType.CLEAR},margins:{top:80,bottom:80,left:140,right:140},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[txt('Result',{bold:true,size:18,color:WHITE})]})]}),
+          new TableCell({width:{size:CONTENT_W-Math.floor(CONTENT_W*0.35)-Math.floor(CONTENT_W*0.30),type:WidthType.DXA},shading:{fill:BLUE,type:ShadingType.CLEAR},margins:{top:80,bottom:80,left:140,right:140},children:[new Paragraph({children:[txt('Basis',{bold:true,size:18,color:WHITE})]})]}),
+        ]}),
+        verdictRow('Readiness',   readinessVerdict,  rTotal>0 ? (rPass+' of '+rTotal+' critical checks passed ('+rPct+'%)') : 'No infrastructure data captured'),
+        verdictRow('Compliance',  complianceVerdict, 'Fields '+Math.round(fieldCompleteness*100)+'% · IR pass '+(irPassRate===null?'n/a':Math.round(irPassRate*100)+'%')),
+        verdictRow('Risk Level',  riskVerdict,       riskAnsTotal>0 ? (riskNoTotal+' flagged across '+riskAnsTotal+' risk items (weighted score '+riskPct+'%)') : 'Risk assessment not completed'),
+      ]
+    });
+
+    // -- Summary paragraph (prose, generated from real values) --
+    const summarySentences = [];
+    summarySentences.push("This report presents the findings of the land cable route audit conducted at the "+st.name+", "+st.country+" Cable Landing Station for the "+sys.name+" submarine cable system"+(d.audit_date?" on "+d.audit_date:"")+", carried out by "+(d.auditors||"the audit team")+".");
+    if(s2.s2_oalc4n||s2.s2_nexn){
+      let p="Spare cable assets on site comprised ";
+      const parts=[];
+      if(s2.s2_oalc4n) parts.push(s2.s2_oalc4n+" OALC4 drum(s)");
+      if(s2.s2_nexn)   parts.push(s2.s2_nexn+" Nexans drum(s)");
+      p += parts.join(" and ");
+      if(s2.s2_cond)        p += ", reported in "+s2.s2_cond.toLowerCase()+" condition";
+      if(s2.s2_oalc4_otdr)  p += ", with an OTDR-measured optical length of "+s2.s2_oalc4_otdr+" metres on the OALC4 cable";
+      p += ".";
+      summarySentences.push(p);
+    }
+    if(mhs.length>0){
+      let p="Of the "+mhs.length+" manhole(s) inspected, "+(waterMH.length||"none")+" exhibited water ingress and "+(unlockedMH.length||"none")+" were found unsecured";
+      if(unlabMH.length>0) p += ", and "+unlabMH.length+" had inadequate cable labelling";
+      p += ".";
+      summarySentences.push(p);
+    }
+    if(fibresCount>0 || irTested.length>0){
+      let p="";
+      if(fibresCount>0) p += fibresCount+" fibre(s) were tested by OTDR";
+      if(fibresCount>0 && irTested.length>0) p += " and ";
+      if(irTested.length>0) p += "insulation resistance was measured on "+irTested.length+" OALC4 drum(s)";
+      p += irFail.length>0 ? ", with drum(s) "+irFail.join(", ")+" returning Fail results." : ", all within acceptable limits.";
+      summarySentences.push(p);
+    }
+    if(presentTools.length+missingTools.length>0){
+      summarySentences.push("The jointing toolkit inventory identified "+presentTools.length+" item(s) present" + (missingTools.length>0 ? " and "+missingTools.length+" absent." : " and no items missing."));
+    }
+    if(riskAnsTotal>0){
+      const catSummary=[];
+      if(riskNoByCat.hs>0)           catSummary.push(riskNoByCat.hs+" health-and-safety");
+      if(riskNoByCat.security>0)     catSummary.push(riskNoByCat.security+" manhole security");
+      if(riskNoByCat.construction>0) catSummary.push(riskNoByCat.construction+" construction");
+      if(riskNoByCat.sharing>0)      catSummary.push(riskNoByCat.sharing+" route sharing");
+      summarySentences.push(riskNoTotal===0
+        ? "The risk assessment returned no adverse findings across the "+riskAnsTotal+" items reviewed."
+        : "The risk assessment flagged "+catSummary.join(", ")+" item(s) as non-conformant.");
+    }
+    summarySentences.push("On the basis of these findings the station is assessed as "+readinessVerdict.toLowerCase()+", with compliance rated "+complianceVerdict.toLowerCase()+" and operational risk assessed as "+riskVerdict.toLowerCase()+".");
+
+    // -- Recommendations paragraph (prose, folds flagged items into narrative) --
+    const recClauses = [];
+    if(waterMH.length>0)     recClauses.push("the "+waterMH.length+" manhole(s) exhibiting water ingress be dewatered and their seals inspected prior to the next audit cycle");
+    if(unlockedMH.length>0)  recClauses.push("the "+unlockedMH.length+" unsecured manhole lid(s) be fitted with approved locking mechanisms as a matter of priority");
+    if(unlabMH.length>0)     recClauses.push("cable labelling be reinstated in the "+unlabMH.length+" affected manhole(s) to restore route traceability");
+    if(irFail.length>0)      recClauses.push("OALC4 drum(s) "+irFail.join(", ")+" that failed the insulation resistance test be investigated and, if confirmed defective, withdrawn from service");
+    if(missingTools.length>0)recClauses.push("the "+missingTools.length+" missing jointing tool(s) be replenished before the next planned maintenance or repair activity");
+    if(riskNoByCat.hs>0)     recClauses.push("the "+riskNoByCat.hs+" health-and-safety non-conformance(s) identified in Section 5 be addressed immediately, given the precedence of personnel safety");
+    if(riskNoByCat.security>0 && unlockedMH.length===0) recClauses.push("the manhole-security observations flagged in the risk assessment be reviewed and a remediation schedule agreed");
+    if(s2.s2_cond && /poor|damag/i.test(s2.s2_cond)) recClauses.push("the condition of the spare cable drums be re-evaluated and, if necessary, replacements planned");
+
+    let recParagraph;
+    if(recClauses.length===0){
+      recParagraph = "No remedial actions are recommended arising from this audit. It is nevertheless recommended that the station continue to follow its standard inspection cycle and that a follow-up audit be scheduled at the usual interval to maintain assurance of continued compliance and operational readiness.";
+    } else {
+      const joined = recClauses.length===1
+        ? recClauses[0]
+        : recClauses.slice(0,-1).join("; ") + "; and "+recClauses[recClauses.length-1];
+      recParagraph = "It is recommended that "+joined+". A follow-up audit should be scheduled in accordance with the standard audit cycle, with an interim inspection of any items rated as requiring immediate remediation.";
+    }
+
+    const sec7=[
+      h1("Conclusion"),
+      verdictHeadline,
+      spacer(160),
+      verdictBreakdown,
+      spacer(200),
+      h2("Summary of Findings"),
+      ...summarySentences.map(p=>bodyPara(p)),
+      spacer(120),
+      h2("Recommendations"),
+      bodyPara(recParagraph),
     ];
-    if(s2.s2_oalc4n||s2.s2_nexn){let p="With respect to spare cable assets, ";if(s2.s2_oalc4n)p+="a total of "+s2.s2_oalc4n+" OALC4 drum(s) were found on site";if(s2.s2_nexn)p+=(s2.s2_oalc4n?" alongside ":"")+s2.s2_nexn+" Nexans drum(s)";if(s2.s2_cond)p+=", in "+s2.s2_cond.toLowerCase()+" condition";p+=".";if(s2.s2_oalc4_otdr)p+=" The optical length of the OALC4 cable as measured by OTDR was "+s2.s2_oalc4_otdr+" metres.";conclusionParas.push(p);}
-    if(missingTools.length===0&&presentTools.length>0)conclusionParas.push("The tools inventory audit confirmed all "+presentTools.length+" inspected items present and accounted for, indicating a well-maintained and complete jointing toolkit.");
-    else if(missingTools.length>0)conclusionParas.push("The tools inventory identified "+missingTools.length+" item(s) as absent. It is recommended that the missing items be procured prior to the next jointing operation.");
-    if(mhs.length>0){let p="A total of "+mhs.length+" manhole(s) were inspected. ";p+=waterMH.length>0?waterMH.length+" manhole(s) were reported to fill with water, which requires attention. ":"No manholes were found to be prone to water ingress. ";p+=unlockedMH.length>0?unlockedMH.length+" manhole lid(s) were found to be unlocked, representing a security vulnerability.":"All manhole lids were confirmed to be locked and secured.";conclusionParas.push(p);}
-    if(fibresCount>0||irFail.length>0){let p="Regarding optical and electrical testing, ";if(fibresCount>0)p+=fibresCount+" fibres were tested and results recorded. ";p+=irFail.length>0?"OALC4 drum(s) "+irFail.join(", ")+" failed the IR test and require investigation.":"All IR tests returned satisfactory results.";conclusionParas.push(p);}
-    const actions=[];
-    if(missingTools.length>0)actions.push("replenishment of "+missingTools.length+" missing tool(s)");
-    if(waterMH.length>0)actions.push("remediation of water ingress in "+waterMH.length+" manhole(s)");
-    if(unlockedMH.length>0)actions.push("securing of "+unlockedMH.length+" unlocked manhole lid(s)");
-    if(irFail.length>0)actions.push("investigation of failed IR test results");
-    conclusionParas.push(actions.length>0?"Several action items require follow-up: "+actions.join("; ")+". It is recommended that the responsible parties address these items prior to the next scheduled audit.":"The station is in a satisfactory state of readiness with no critical deficiencies identified during this audit.");
-    conclusionParas.push("It is recommended that a follow-up audit be scheduled in accordance with the standard audit cycle to ensure continued compliance and operational readiness.");
-    const sec7=[h1("Conclusion"),...conclusionParas.map(p=>bodyPara(p))];
 
     // ── BUILD & DOWNLOAD ──
     const doc=new Document({
