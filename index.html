@@ -1527,10 +1527,13 @@ async function generateReport(){
 function buildReportHTML(sys, st, ad, d) {
   const siteName = st ? st.name : '';
   const cableName = sys ? sys.name : '';
-  const auditDate = d.auditDate || '';
-  const auditor = d.auditorName || 'Garth Mason';
-  const landingParty = d.landingParty || '';
-  const clsName = d.clsName || '';
+  const auditDate = d.audit_date || '';
+  const auditor = d.auditors || 'Garth Mason';
+  const landingParty = d.landing_party || '';
+  const clsName = d.cls_name || '';
+  const city = d.city || '';
+  const country = d.country || '';
+  const depotName = d.depot_name || '';
 
   const sec = (key) => ad[key] || {};
   const arr = (key) => Array.isArray(ad[key]) ? ad[key] : [];
@@ -1587,7 +1590,6 @@ function buildReportHTML(sys, st, ad, d) {
     return `<h2>${num} ${title}</h2><table>${r}</table>`;
   };
 
-  // Manholes
   let mhHtml = '';
   if(mh.length) {
     mhHtml = '<h2>5. Manholes</h2>';
@@ -1601,7 +1603,6 @@ function buildReportHTML(sys, st, ad, d) {
     });
   }
 
-  // Tools
   let toolsHtml = '';
   if(tools && Object.keys(tools).length) {
     toolsHtml = '<h2>3.5 Tools</h2><table><tr><th>Tool</th><th>Present</th></tr>';
@@ -1612,7 +1613,6 @@ function buildReportHTML(sys, st, ad, d) {
     toolsHtml += '</table>';
   }
 
-  // Fibres
   let fibresHtml = '';
   if(fibres.length) {
     fibresHtml = '<h2>Fibres</h2><table><tr><th>#</th><th>Fibre</th><th>Status</th><th>Notes</th></tr>';
@@ -1622,7 +1622,6 @@ function buildReportHTML(sys, st, ad, d) {
     fibresHtml += '</table>';
   }
 
-  // IR Tests
   let irHtml = '';
   if(ir.length) {
     irHtml = '<h2>IR Tests</h2><table><tr><th>Test</th><th>Value</th><th>Result</th></tr>';
@@ -1633,7 +1632,6 @@ function buildReportHTML(sys, st, ad, d) {
     irHtml += '</table>';
   }
 
-  // Daily activities
   let daHtml = '';
   if(da.length) {
     daHtml = '<h2>7. Daily Activities</h2><table><tr><th>Date</th><th>Activity</th><th>Personnel</th></tr>';
@@ -1643,10 +1641,9 @@ function buildReportHTML(sys, st, ad, d) {
     daHtml += '</table>';
   }
 
-  // Photos
   let photosHtml = '';
   if(photos.length) {
-    photosHtml = '<h2>Annex I — Photographs</h2><div class="photo-grid">';
+    photosHtml = '<h2>Annex I \u2014 Photographs</h2><div class="photo-grid">';
     photos.forEach((p,i) => {
       const src = p.dataUrl || p.url || p.src || '';
       if(src) photosHtml += `<div class="photo-item"><img src="${src}"><div class="photo-caption">${p.caption||p.description||'Photo '+(i+1)}</div></div>`;
@@ -1663,7 +1660,6 @@ function buildReportHTML(sys, st, ad, d) {
 </head>
 <body>
 <div class="page">
-
   <div class="cover">
     <h1>Cable Route Audit Report</h1>
     <div class="sub"><strong>${cableName}</strong> \u2014 ${siteName}</div>
@@ -1680,7 +1676,9 @@ function buildReportHTML(sys, st, ad, d) {
     <tr><td class="label">Audit Date</td><td>${auditDate}</td></tr>
     <tr><td class="label">Auditor</td><td>${auditor}</td></tr>
     <tr><td class="label">Landing Party</td><td>${landingParty}</td></tr>
-    ${objRows(si)}
+    <tr><td class="label">City</td><td>${city}</td></tr>
+    <tr><td class="label">Country</td><td>${country}</td></tr>
+    <tr><td class="label">Cable Depot / Storage</td><td>${depotName}</td></tr>
   </table>
 
   ${sectionBlock('2.', 'Spare Cable', sc)}
@@ -1701,7 +1699,6 @@ function buildReportHTML(sys, st, ad, d) {
     <span>${auditDate}</span>
   </div>
 </div>
-
 <div class="no-print" style="text-align:center;padding:20px 0 40px;">
   <button onclick="window.print()" style="padding:10px 30px;font-size:14pt;background:#1C3E8F;color:#fff;border:none;border-radius:6px;cursor:pointer;">&#x1F5A8; Print / Save as PDF</button>
 </div>
