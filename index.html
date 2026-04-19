@@ -1512,10 +1512,15 @@ async function generateReport(){
 
   try {
     const html = buildReportHTML(sys, st, ad, d);
-    const w = window.open('', '_blank');
-    if(!w){ alert('Please allow popups for this site to view the report.'); return; }
-    w.document.write(html);
-    w.document.close();
+    // Overlay report in current page - avoids Safari popup blocker
+    let overlay = document.getElementById('report-overlay');
+    if(!overlay){
+      overlay = document.createElement('div');
+      overlay.id = 'report-overlay';
+      overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:9999;overflow:auto;';
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = html;
   } catch(err) {
     console.error('Report generation error:', err);
     alert('Report generation failed: ' + err.message + '\n\nCheck browser console for details.');
@@ -1535,134 +1540,62 @@ function buildReportHTML(sys, st, ad, d) {
   const country = d.country || '';
   const depotName = d.depot_name || '';
 
-  const sec = (key) => ad[key] || {};
-  const arr = (key) => Array.isArray(ad[key]) ? ad[key] : [];
-
-  const si = sec('siteInfo');
-  const sc = sec('spareCable');
-  const jk = sec('jointingKits');
-  const te = sec('testEquipment');
-  const js2 = sec('jointingSupport');
-  const mh = arr('manholes');
-  const tools = sec('tools');
-  const fibres = arr('fibres');
-  const ir = arr('irTests');
-  const ra = sec('riskAssessment');
-  const da = arr('dailyActivities');
-  const photos = arr('photos');
-
-  const css = `
-    body { font-family: Arial, sans-serif; font-size: 11pt; color: #000; margin: 0; padding: 0; }
-    .page { max-width: 210mm; margin: 0 auto; padding: 20mm 20mm 20mm 25mm; }
-    h1 { font-size: 16pt; color: #1C3E8F; border-bottom: 2px solid #1C3E8F; padding-bottom: 6px; }
-    h2 { font-size: 13pt; color: #1C3E8F; margin-top: 24px; }
-    h3 { font-size: 11pt; color: #333; margin-top: 14px; }
-    table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; }
-    th { background: #1C3E8F; color: #fff; padding: 6px 8px; text-align: left; }
-    td { border: 1px solid #ccc; padding: 5px 8px; vertical-align: top; }
-    tr:nth-child(even) td { background: #f5f7ff; }
-    .label { font-weight: bold; width: 35%; background: #eef0f8; }
-    .cover { text-align: center; padding: 60px 0 40px; }
-    .cover h1 { border: none; font-size: 22pt; margin-bottom: 8px; }
-    .cover .sub { font-size: 13pt; color: #555; margin: 6px 0; }
-    .footer { margin-top: 40px; border-top: 2px solid #1C3E8F; padding-top: 8px; font-size: 9pt; color: #555; display: flex; justify-content: space-between; }
-    .pass { color: green; font-weight: bold; }
-    .fail { color: red; font-weight: bold; }
-    .na { color: #888; }
-    .photo-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
-    .photo-item { flex: 0 0 45%; }
-    .photo-item img { width: 100%; border: 1px solid #ccc; }
-    .photo-caption { font-size: 9pt; color: #555; text-align: center; margin-top: 4px; }
-    @media print { .no-print { display: none; } }
-  `;
-
   const fmtKey = k => k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
 
-  const objRows = (obj, skip=[]) => Object.entries(obj)
-    .filter(([k,v]) => !skip.includes(k) && v !== undefined && v !== '' && v !== null)
-    .map(([k,v]) => `<tr><td class="label">${fmtKey(k)}</td><td>${v}</td></tr>`)
-    .join('');
-
-  const sectionBlock = (num, title, obj, skip=[]) => {
+  const sectionTable = (title, obj) => {
     if(!obj || !Object.keys(obj).length) return '';
-    const r = objRows(obj, skip);
-    if(!r) return '';
-    return `<h2>${num} ${title}</h2><table>${r}</table>`;
+    const rows = Object.entries(obj)
+      .filter(([k,v]) => v !== undefined && v !== '' && v !== null)
+      .map(([k,v]) => `<tr><td class="label">${k}</td><td>${v}</td></tr>`)
+      .join('');
+    if(!rows) return '';
+    return `<h2>${title}</h2><table>${rows}</table>`;
   };
 
-  let mhHtml = '';
-  if(mh.length) {
-    mhHtml = '<h2>5. Manholes</h2>';
-    mh.forEach((m, i) => {
-      mhHtml += `<h3>Manhole ${i+1}${m.id ? ': ' + m.id : ''}</h3><table>`;
-      if(m.type) mhHtml += `<tr><td class="label">Type</td><td>${m.type}</td></tr>`;
-      if(m.location) mhHtml += `<tr><td class="label">Location</td><td>${m.location}</td></tr>`;
-      if(m.condition) mhHtml += `<tr><td class="label">Condition</td><td>${m.condition}</td></tr>`;
-      if(m.notes) mhHtml += `<tr><td class="label">Notes</td><td>${m.notes}</td></tr>`;
-      mhHtml += '</table>';
-    });
-  }
+  const s1 = ad.s1 || {};
+  const s2 = ad.s2 || {};
+  const s3 = ad.s3 || {};
+  const s4 = ad.s4 || {};
+  const s5 = ad.s5 || {};
+  const s6 = ad.s6 || {};
+  const s8 = ad.s8 || {};
+  const s9 = ad.s9 || {};
+  const s10 = ad.s10 || {};
+  const s11 = ad.s11 || {};
 
-  let toolsHtml = '';
-  if(tools && Object.keys(tools).length) {
-    toolsHtml = '<h2>3.5 Tools</h2><table><tr><th>Tool</th><th>Present</th></tr>';
-    for(const [k,v] of Object.entries(tools)){
-      const cls = (v==='Yes'||v===true) ? 'pass' : (v==='No'||v===false) ? 'fail' : 'na';
-      toolsHtml += `<tr><td>${fmtKey(k)}</td><td class="${cls}">${v}</td></tr>`;
-    }
-    toolsHtml += '</table>';
-  }
-
-  let fibresHtml = '';
-  if(fibres.length) {
-    fibresHtml = '<h2>Fibres</h2><table><tr><th>#</th><th>Fibre</th><th>Status</th><th>Notes</th></tr>';
-    fibres.forEach((f,i) => {
-      fibresHtml += `<tr><td>${i+1}</td><td>${f.fibre||f.id||''}</td><td>${f.status||''}</td><td>${f.notes||''}</td></tr>`;
-    });
-    fibresHtml += '</table>';
-  }
-
-  let irHtml = '';
-  if(ir.length) {
-    irHtml = '<h2>IR Tests</h2><table><tr><th>Test</th><th>Value</th><th>Result</th></tr>';
-    ir.forEach(t => {
-      const cls = t.result==='Pass' ? 'pass' : t.result==='Fail' ? 'fail' : '';
-      irHtml += `<tr><td>${t.test||t.name||''}</td><td>${t.value||''}</td><td class="${cls}">${t.result||''}</td></tr>`;
-    });
-    irHtml += '</table>';
-  }
-
-  let daHtml = '';
-  if(da.length) {
-    daHtml = '<h2>7. Daily Activities</h2><table><tr><th>Date</th><th>Activity</th><th>Personnel</th></tr>';
-    da.forEach(a => {
-      daHtml += `<tr><td>${a.date||''}</td><td>${a.activity||a.description||''}</td><td>${a.personnel||''}</td></tr>`;
-    });
-    daHtml += '</table>';
-  }
-
-  let photosHtml = '';
-  if(photos.length) {
-    photosHtml = '<h2>Annex I \u2014 Photographs</h2><div class="photo-grid">';
-    photos.forEach((p,i) => {
-      const src = p.dataUrl || p.url || p.src || '';
-      if(src) photosHtml += `<div class="photo-item"><img src="${src}"><div class="photo-caption">${p.caption||p.description||'Photo '+(i+1)}</div></div>`;
-    });
-    photosHtml += '</div>';
-  }
+  const css = `
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 11pt; color: #000; margin: 0; padding: 0; }
+    .page { max-width: 210mm; margin: 0 auto; padding: 15mm 20mm 20mm 25mm; }
+    h1 { font-size: 16pt; color: #1C3E8F; border-bottom: 2px solid #1C3E8F; padding-bottom: 6px; }
+    h2 { font-size: 13pt; color: #1C3E8F; margin-top: 24px; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 10pt; }
+    th { background: #1C3E8F; color: #fff; padding: 6px 8px; text-align: left; }
+    td { border: 1px solid #ccc; padding: 5px 8px; vertical-align: top; word-break: break-word; }
+    tr:nth-child(even) td { background: #f5f7ff; }
+    .label { font-weight: bold; width: 40%; background: #eef0f8; }
+    .cover { text-align: center; padding: 40px 0 30px; }
+    .cover h1 { border: none; font-size: 20pt; margin-bottom: 8px; }
+    .cover .sub { font-size: 12pt; color: #555; margin: 5px 0; }
+    .footer { margin-top: 30px; border-top: 2px solid #1C3E8F; padding-top: 8px; font-size: 9pt; color: #555; display: flex; justify-content: space-between; }
+    .toolbar { background: #1C3E8F; color: #fff; padding: 10px 20px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+    .toolbar button { padding: 8px 20px; font-size: 12pt; border: 2px solid #fff; border-radius: 5px; cursor: pointer; background: transparent; color: #fff; }
+    .toolbar button:hover { background: rgba(255,255,255,0.2); }
+    @media print { .toolbar { display: none; } }
+  `;
 
   return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Audit Report \u2014 ${cableName} ${siteName}</title>
-<style>${css}</style>
-</head>
+<html><head><meta charset="UTF-8"><style>${css}</style></head>
 <body>
+<div class="toolbar">
+  <span style="flex:1;font-weight:bold">Audit Report &mdash; ${cableName} ${siteName}</span>
+  <button onclick="window.print()">&#x1F5A8; Print / Save as PDF</button>
+  <button onclick="document.getElementById('report-overlay').remove()">&#x2715; Close</button>
+</div>
 <div class="page">
   <div class="cover">
     <h1>Cable Route Audit Report</h1>
-    <div class="sub"><strong>${cableName}</strong> \u2014 ${siteName}</div>
+    <div class="sub"><strong>${cableName}</strong> &mdash; ${siteName}</div>
     <div class="sub">Audit Date: ${auditDate}</div>
     <div class="sub">Auditor: ${auditor}</div>
     <div class="sub">Landing Party: ${landingParty}</div>
@@ -1671,39 +1604,33 @@ function buildReportHTML(sys, st, ad, d) {
   <h1>1. Site Information</h1>
   <table>
     <tr><td class="label">Cable System</td><td>${cableName}</td></tr>
-    <tr><td class="label">Station</td><td>${siteName}</td></tr>
+    <tr><td class="label">Station (CLS)</td><td>${siteName}</td></tr>
     <tr><td class="label">CLS Name</td><td>${clsName}</td></tr>
     <tr><td class="label">Audit Date</td><td>${auditDate}</td></tr>
-    <tr><td class="label">Auditor</td><td>${auditor}</td></tr>
+    <tr><td class="label">Auditor(s)</td><td>${auditor}</td></tr>
     <tr><td class="label">Landing Party</td><td>${landingParty}</td></tr>
     <tr><td class="label">City</td><td>${city}</td></tr>
     <tr><td class="label">Country</td><td>${country}</td></tr>
     <tr><td class="label">Cable Depot / Storage</td><td>${depotName}</td></tr>
   </table>
 
-  ${sectionBlock('2.', 'Spare Cable', sc)}
-  ${sectionBlock('3.', 'Jointing Kits', jk)}
-  ${sectionBlock('3.2', 'Test Equipment', te)}
-  ${sectionBlock('3.3', 'Jointing Support', js2)}
-  ${mhHtml}
-  ${toolsHtml}
-  ${fibresHtml}
-  ${irHtml}
-  ${sectionBlock('6.', 'Risk Assessment', ra)}
-  ${daHtml}
-  ${photosHtml}
+  ${sectionTable('2. Spare Cable', s2)}
+  ${sectionTable('3. Jointing Kits', s3)}
+  ${sectionTable('3.2 Test Equipment', s4)}
+  ${sectionTable('3.3 Jointing Support', s5)}
+  ${sectionTable('5. Manholes', s6)}
+  ${sectionTable('Fibres', s8)}
+  ${sectionTable('IR Tests', s9)}
+  ${sectionTable('6. Risk Assessment', s10)}
+  ${sectionTable('7. Daily Activities', s11)}
 
   <div class="footer">
     <span>Trigva Audit Platform</span>
-    <span>${cableName} \u2014 ${siteName}</span>
+    <span>${cableName} &mdash; ${siteName}</span>
     <span>${auditDate}</span>
   </div>
 </div>
-<div class="no-print" style="text-align:center;padding:20px 0 40px;">
-  <button onclick="window.print()" style="padding:10px 30px;font-size:14pt;background:#1C3E8F;color:#fff;border:none;border-radius:6px;cursor:pointer;">&#x1F5A8; Print / Save as PDF</button>
-</div>
-</body>
-</html>`;
+</body></html>`;
 }
 
 // ── ROLE TOGGLE ──
