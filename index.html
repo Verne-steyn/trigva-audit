@@ -1829,18 +1829,39 @@ function buildReportHTML(sys, st, ad, d) {
   })()}
 
   ${(()=>{
-    // Annex II — OTDR Traces (embed PDFs as iframes in screen view)
+    // Annex II — OTDR Traces
+    // Keys are otdr_f{num}_file, find all uploaded traces dynamically
     const s13 = ad.s13 || {};
-    const traces = [];
-    for(let i=1;i<=32;i++){
-      const file = s13[`otdr_f${i}_file`];
-      const name = s13[`otdr_f${i}_name`] || `Fibre ${i}`;
-      const label = s13[`otdr_f${i}_label`] || name;
-      if(file) traces.push({file, label, num:i});
-    }
-    if(!traces.length) return '';
-    const items = traces.map(t => `<div style="margin-bottom:16px;break-inside:avoid"><div style="font-weight:bold;font-size:10pt;margin-bottom:4px">Fibre ${t.num}: ${t.label}</div><p style="font-size:9pt;color:#555">OTDR trace attached — ${t.label}</p></div>`).join('');
-    return `<h1 style="margin-top:40px">Annex II — OTDR Traces</h1><p style="font-size:10pt;margin-bottom:12px">${traces.length} OTDR trace(s) uploaded. PDF files are embedded in the audit data.</p>${items}`;
+    const fileKeys = Object.keys(s13).filter(k => k.startsWith('otdr_') && k.endsWith('_file'));
+    if(!fileKeys.length) return '';
+    // Sort by fibre number
+    fileKeys.sort((a,b) => {
+      const na = parseInt(a.replace('otdr_f','').replace('_file','')) || 0;
+      const nb = parseInt(b.replace('otdr_f','').replace('_file','')) || 0;
+      return na - nb;
+    });
+    const traces = fileKeys.map(fk => {
+      const num = fk.replace('otdr_f','').replace('_file','');
+      const name = s13['otdr_f'+num+'_name'] || ('Fibre '+num);
+      const label = s13['otdr_f'+num+'_label'] || name;
+      const colour = s13['otdr_f'+num+'_colour'] || '—';
+      const spanLen = s13['otdr_f'+num+'_spanlen'] || '—';
+      const spanLoss = s13['otdr_f'+num+'_spanloss'] || '—';
+      const file = s13[fk]; // base64 PDF
+      return {num, name, label, colour, spanLen, spanLoss, file};
+    });
+    const tableRows = traces.map(t =>
+      `<tr><td style="text-align:center">${t.num}</td><td>${t.colour}</td><td>${t.spanLen}</td><td>${t.spanLoss}</td><td>${t.label||t.name}</td></tr>`
+    ).join('');
+    const table = `<table style="margin-bottom:24px"><thead><tr><th>#</th><th>Colour</th><th>Span Length (km)</th><th>Span Loss (dB)</th><th>Label / Filename</th></tr></thead><tbody>${tableRows}</tbody></table>`;
+    // Embed each PDF as an iframe for on-screen viewing (won't print, but visible in overlay)
+    const pdfs = traces.map(t =>
+      `<div style="margin-bottom:24px;break-before:page"><h3 style="color:#1C3E8F;margin-bottom:8px">Fibre ${t.num}: ${t.label||t.name}</h3><iframe src="${t.file}" style="width:100%;height:500px;border:1px solid #ccc;border-radius:4px"></iframe></div>`
+    ).join('');
+    return \`<h1 style="margin-top:40px">Annex II — OTDR Traces</h1>
+    <p style="font-size:10pt;margin-bottom:12px">\${traces.length} OTDR trace(s) uploaded.</p>
+    \${table}
+    \${pdfs}\`;
   })()}
 
   <div class="footer">
