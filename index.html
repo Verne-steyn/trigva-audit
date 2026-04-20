@@ -1535,20 +1535,43 @@ function printReport(){
   const overlay = document.getElementById('report-overlay');
   const html = overlay ? overlay._reportHtml : null;
   if(!html){ alert('Please generate the report first.'); return; }
-  // Remove any existing print iframe
-  const old = document.getElementById('print-iframe');
-  if(old) old.remove();
-  const iframe = document.createElement('iframe');
-  iframe.id = 'print-iframe';
-  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;visibility:hidden;';
-  document.body.appendChild(iframe);
-  iframe.onload = function(){
+  const blob = new Blob([html], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  // Try opening in a new tab (works on Safari, Chrome, Edge, Firefox)
+  const win = window.open(url, '_blank');
+  if(!win){
+    // Popup blocked — offer a direct download link instead
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Trigva_Audit_Report.html';
+    a.style.cssText = 'display:block;margin-top:10px;padding:10px 20px;background:#1C3E8F;color:#fff;border-radius:6px;text-align:center;text-decoration:none;font-weight:600';
+    a.textContent = '⬇ Download Report (HTML)';
+    const prog = document.getElementById('report-progress');
+    if(prog){ prog.innerHTML = ''; prog.appendChild(a); }
+    return;
+  }
+  win.addEventListener('load', function(){
     setTimeout(function(){
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-    }, 500);
-  };
-  iframe.srcdoc = html;
+      win.print();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+    }, 600);
+  });
+}
+
+function downloadReportPDF(){
+  const overlay = document.getElementById('report-overlay');
+  const html = overlay ? overlay._reportHtml : null;
+  if(!html){ alert('Please generate the report first.'); return; }
+  // Direct HTML download — user can open in browser and print from there
+  const blob = new Blob([html], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'Trigva_Audit_Report.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
 }
 
 function buildReportHTML(sys, st, ad, d) {
@@ -1666,7 +1689,15 @@ function buildReportHTML(sys, st, ad, d) {
     .toolbar { background: #1C3E8F; color: #fff; padding: 10px 20px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
     .toolbar button { padding: 8px 20px; font-size: 12pt; border: 2px solid #fff; border-radius: 5px; cursor: pointer; background: transparent; color: #fff; }
     .toolbar button:hover { background: rgba(255,255,255,0.2); }
-    @media print { .toolbar { display: none; } }
+    @media print {
+      .toolbar { display: none !important; }
+      .page { padding: 10mm 15mm !important; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      h1, h2, h3 { page-break-after: avoid; }
+      table { page-break-inside: avoid; }
+      tr { page-break-inside: avoid; }
+      img { page-break-inside: avoid; max-width: 100% !important; }
+    }
   `;
 
   return `<!DOCTYPE html>
@@ -1674,7 +1705,7 @@ function buildReportHTML(sys, st, ad, d) {
 <body>
 <div class="toolbar">
   <span style="flex:1;font-weight:bold">Audit Report &mdash; ${cableName} ${siteName}</span>
-  <button onclick="printReport()">&#x1F5A8; Print / Save as PDF</button>
+  <button onclick="printReport()" style="margin-right:8px">&#x1F5A8; Print / Save as PDF</button><button onclick="downloadReportPDF()" title="Download as HTML file (open in browser, then print to PDF)">&#x2B07; Download</button>
   <button onclick="document.getElementById('report-overlay').remove()">&#x2715; Close</button>
 </div>
 <div class="page">
