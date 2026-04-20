@@ -694,10 +694,18 @@ async function showAuditSelect(){
         <button class="btn btn-sm" style="width:auto;padding:6px 14px" onclick="openAudit('${a.id}','${a.status}')">
           ${isDraft?'Continue →':'Reopen & Edit'}
         </button>
-        <button class="btn btn-sm btn-outline" style="width:auto;padding:6px 14px" onclick="previewReport('${a.id}')">📄 Report</button>
+        <button class="btn btn-sm btn-outline" style="width:auto;padding:6px 14px;color:#c00;border-color:#c00" onclick="deleteAudit('${a.id}','${date}')">🗑 Delete</button>
       </div>
     </div>`;
   }).join('');
+}
+
+async function deleteAudit(id, dateLabel){
+  if(!confirm(`Delete the audit created ${dateLabel}? This cannot be undone.`)) return;
+  const{error}=await sb.from('trigva_audits').delete().eq('id',id);
+  if(error){ toast('Delete failed: '+error.message,'error'); return; }
+  toast('Audit deleted','ok');
+  await showAuditSelect(); // refresh the list
 }
 
 async function openAudit(id, status){
