@@ -1858,10 +1858,10 @@ function buildReportHTML(sys, st, ad, d) {
     const pdfs = traces.map(t =>
       `<div style="margin-bottom:24px;break-before:page"><h3 style="color:#1C3E8F;margin-bottom:8px">Fibre ${t.num}: ${t.label||t.name}</h3><iframe src="${t.file}" style="width:100%;height:500px;border:1px solid #ccc;border-radius:4px"></iframe></div>`
     ).join('');
-    return \`<h1 style="margin-top:40px">Annex II — OTDR Traces</h1>
-    <p style="font-size:10pt;margin-bottom:12px">\${traces.length} OTDR trace(s) uploaded.</p>
-    \${table}
-    \${pdfs}\`;
+    return `<h1 style="margin-top:40px">Annex II — OTDR Traces</h1>
+    <p style="font-size:10pt;margin-bottom:12px">${traces.length} OTDR trace(s) uploaded.</p>
+    ${table}
+    ${pdfs}`;
   })()}
 
   <div class="footer">
